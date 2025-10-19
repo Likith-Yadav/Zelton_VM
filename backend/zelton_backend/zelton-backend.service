@@ -1,0 +1,33 @@
+[Unit]
+Description=Zelton Backend Gunicorn daemon
+After=network.target
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+WorkingDirectory=/ZeltonLivings/appsdata/backend/zelton_backend
+Environment="DJANGO_SETTINGS_MODULE=zelton_backend.settings_production"
+Environment="PATH=/ZeltonLivings/appsdata/backend/venv/bin"
+ExecStart=/ZeltonLivings/appsdata/backend/venv/bin/gunicorn --config gunicorn.conf.py zelton_backend.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PIDFile=/var/run/zelton/gunicorn.pid
+Restart=always
+RestartSec=3
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/ZeltonLivings/appsdata/backend/zelton_backend
+ReadWritePaths=/var/log/zelton
+ReadWritePaths=/var/run/zelton
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
