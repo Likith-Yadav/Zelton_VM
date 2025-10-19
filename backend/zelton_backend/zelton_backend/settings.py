@@ -56,17 +56,18 @@ CSRF_TRUSTED_ORIGINS = [
     'http://192.168.1.36:8000',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://t5zr0wzf-8000.inc1.devtunnels.ms',
-    'http://t5zr0wzf-8000.inc1.devtunnels.ms',
+    'https://api.zelton.in',
+    'http://api.zelton.in',
 ]
 
 # SSL Security Settings (for production with HTTPS)
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# Only enable SSL redirects in production
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # CSRF settings for API
@@ -84,8 +85,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://192.168.1.36:19001',
     'http://192.168.1.36:19002',
     'http://192.168.1.36:19006',
-     'https://t5zr0wzf-8000.inc1.devtunnels.ms',
-    'http://t5zr0wzf-8000.inc1.devtunnels.ms',
+    'https://api.zelton.in',
+    'http://api.zelton.in',
 ]
 
 
@@ -189,7 +190,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "assets/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Media files (User uploaded files)
@@ -208,7 +209,7 @@ PHONEPE_CLIENT_VERSION = config('PHONEPE_CLIENT_VERSION', default=1, cast=int)
 PHONEPE_ENVIRONMENT = config('PHONEPE_ENVIRONMENT', default='SANDBOX')
 PHONEPE_WEBHOOK_USERNAME = config('PHONEPE_WEBHOOK_USERNAME')
 PHONEPE_WEBHOOK_PASSWORD = config('PHONEPE_WEBHOOK_PASSWORD')
-PHONEPE_REDIRECT_BASE_URL = config('PHONEPE_REDIRECT_BASE_URL', default='http://t5zr0wzf-8000.inc1.devtunnels.ms')
+PHONEPE_REDIRECT_BASE_URL = config('PHONEPE_REDIRECT_BASE_URL', default='http://api.zelton.in')
 
 # Logging Configuration
 LOGGING = {
@@ -292,14 +293,14 @@ MEDIA_ROOT = '/ZeltonLivings/dbdata/media'
 # This ensures that build_absolute_uri() uses the correct domain
 if DEBUG:
     # For development with dev tunnels
-    BASE_URL = 'https://t5zr0wzf-8000.inc1.devtunnels.ms'
+    BASE_URL = 'https://api.zelton.in'
 else:
     # For production
-    BASE_URL = 'https://your-production-domain.com'
+    BASE_URL = 'https://api.zelton.in'
 
 # Session configuration for OTP storage
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 600  # 10 minutes (same as OTP expiry)
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SAMESITE = 'None'  # Allow cross-origin requests
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-origin requests
+SESSION_COOKIE_SECURE = not DEBUG  # Set to True in production with HTTPS

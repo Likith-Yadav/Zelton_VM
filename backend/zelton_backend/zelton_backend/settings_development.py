@@ -36,8 +36,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://192.168.1.36:8000',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://t5zr0wzf-8000.inc1.devtunnels.ms',
-    'http://t5zr0wzf-8000.inc1.devtunnels.ms',
+    'http://api.zelton.in',
 ]
 
 # Disable CSRF for API endpoints in development
