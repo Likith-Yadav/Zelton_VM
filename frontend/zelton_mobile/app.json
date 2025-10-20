@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Zelton",
+    "slug": "zelton_mobile",
+    "version": "1.0.0",
+    "description": "Property management app for owners and tenants",
+    "orientation": "portrait",
+    "icon": "./assets/adaptive-icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": false,
+      "package": "com.zelton.mobile",
+      "config": {
+        "compileSdkVersion": 34,
+        "targetSdkVersion": 34,
+        "minSdkVersion": 21
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "507c1faf-c3c1-4df3-b9a6-b3745740a13a"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "owner": ""
+  }
+}
