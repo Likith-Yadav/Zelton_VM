@@ -94,3 +94,5 @@ cookies.txt
 # Configuration files with sensitive data
 config.json
 secrets.json
+.npm-cache
+.nvm

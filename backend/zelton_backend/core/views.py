@@ -196,16 +196,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
         return Property.objects.none()
 
     def create(self, request, *args, **kwargs):
-        print("=== PropertyViewSet.create Debug ===")
-        print("Request data:", request.data)
-        print("Request method:", request.method)
-        print("Request content type:", request.content_type)
         
         serializer = self.get_serializer(data=request.data)
-        print("Serializer data:", serializer.initial_data)
-        print("Serializer is valid:", serializer.is_valid())
         if not serializer.is_valid():
-            print("Serializer errors:", serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         self.perform_create(serializer)
@@ -213,22 +206,13 @@ class PropertyViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
-        print("=== Property Creation Debug ===")
-        print("Request data:", self.request.data)
-        print("Request method:", self.request.method)
-        print("Request content type:", self.request.content_type)
-        print("User:", self.request.user)
         
         try:
             owner = Owner.objects.get(user=self.request.user)
-            print("Owner found:", owner)
             serializer.save(owner=owner)
-            print("Property created successfully")
         except Owner.DoesNotExist:
-            print("Owner not found for user:", self.request.user)
             raise serializers.ValidationError({'owner': 'Owner profile not found'})
         except Exception as e:
-            print("Error creating property:", str(e))
             raise
 
     @action(detail=False, methods=['get'])
@@ -328,7 +312,6 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     'total_units': property.total_units,
                     'occupied_units': property.occupied_units,
                     'vacant_units': property.total_units - property.occupied_units,
-                    'emergency_contact': property.emergency_contact,
                     'maintenance_contacts': property.maintenance_contacts or {},
                     'total_payments': float(total_payments),
                     'current_month_payments': float(current_month_payments),
@@ -408,9 +391,27 @@ class UnitViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         owner = Owner.objects.filter(user=self.request.user).first()
-        if owner:
-            return Unit.objects.filter(property__owner=owner)
-        return Unit.objects.none()
+        if not owner:
+            return Unit.objects.none()
+
+        queryset = Unit.objects.filter(property__owner=owner)
+
+        # Optional filter by property id from query params
+        property_id = self.request.query_params.get('property')
+        if property_id is not None:
+            try:
+                property_id_int = int(property_id)
+            except (ValueError, TypeError):
+                return Unit.objects.none()
+
+            # Ensure the property exists and belongs to this owner
+            has_property = Property.objects.filter(id=property_id_int, owner=owner).exists()
+            if not has_property:
+                return Unit.objects.none()
+
+            queryset = queryset.filter(property_id=property_id_int)
+
+        return queryset
 
     def perform_create(self, serializer):
         # The property should be passed in the request data
@@ -688,8 +689,6 @@ class TenantViewSet(viewsets.ModelViewSet):
                         'city': '',
                         'state': '',
                         'pincode': '',
-                        'emergency_contact': '',
-                        'emergency_contact_name': '',
                     }
                 )
                 print("Authenticated user - Tenant found/created:", tenant, "Created:", created)
@@ -720,8 +719,6 @@ class TenantViewSet(viewsets.ModelViewSet):
                     city='',
                     state='',
                     pincode='',
-                    emergency_contact='',
-                    emergency_contact_name='',
                 )
                 created = True
                 print("Temporary user and tenant created:", tenant)
@@ -906,7 +903,6 @@ class TenantViewSet(viewsets.ModelViewSet):
                 'pincode': current_property.pincode,
                 'total_units': current_property.total_units,
                 'occupied_units': current_property.occupied_units,
-                'emergency_contact': current_property.emergency_contact,
                 'maintenance_contacts': current_property.maintenance_contacts or {},
             },
             'current_unit': UnitSerializer(current_unit).data,
@@ -1117,7 +1113,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Tenant profile not found'}, status=status.HTTP_404_NOT_FOUND)
             
             # Update tenant fields
-            for field in ['phone', 'address', 'city', 'state', 'pincode', 'emergency_contact', 'emergency_contact_name']:
+            for field in ['phone', 'address', 'city', 'state', 'pincode']:
                 if field in request.data:
                     setattr(tenant, field, request.data[field])
             
@@ -1134,8 +1130,6 @@ class TenantViewSet(viewsets.ModelViewSet):
                     'city': tenant.city,
                     'state': tenant.state,
                     'pincode': tenant.pincode,
-                    'emergency_contact': tenant.emergency_contact,
-                    'emergency_contact_name': tenant.emergency_contact_name,
                 }
             })
             

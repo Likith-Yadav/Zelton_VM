@@ -24,7 +24,7 @@ class OwnerSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'phone', 'address', 'city', 'state', 'pincode',
             'pan_number', 'aadhar_number', 'profile_image', 'date_of_birth', 'gender', 'occupation',
-            'emergency_contact', 'emergency_contact_name', 'payment_method', 'bank_name', 
+            'payment_method', 'bank_name', 
             'ifsc_code', 'account_number', 'upi_id', 'subscription_plan', 'subscription_status',
             'subscription_start_date', 'subscription_end_date', 'total_properties',
             'created_at', 'updated_at'
@@ -55,7 +55,7 @@ class PropertySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'owner', 'owner_name', 'name', 'address', 'city', 'state', 'pincode',
             'property_type', 'description', 'total_units', 'occupied_units',
-            'emergency_contact', 'maintenance_contacts', 'images', 'created_at', 'updated_at'
+            'maintenance_contacts', 'images', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'owner', 'created_at', 'updated_at', 'total_units', 'occupied_units']
 
@@ -257,7 +257,7 @@ class TenantSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'phone', 'address', 'city', 'state', 'pincode',
             'pan_number', 'aadhar_number', 'profile_image', 'date_of_birth', 'gender', 'occupation',
-            'emergency_contact', 'emergency_contact_name', 'created_at', 'updated_at'
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     

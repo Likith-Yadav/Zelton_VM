@@ -32,9 +32,9 @@ class OwnerAdmin(admin.ModelAdmin):
 
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
-    list_display = ['name', 'owner', 'city', 'property_type', 'total_units', 'occupied_units', 'emergency_contact', 'get_maintenance_contacts_count']
+    list_display = ['name', 'owner', 'city', 'property_type', 'total_units', 'occupied_units', 'get_maintenance_contacts_count']
     list_filter = ['property_type', 'city', 'state']
-    search_fields = ['name', 'city', 'address', 'emergency_contact']
+    search_fields = ['name', 'city', 'address']
     readonly_fields = ['get_maintenance_contacts_display']
     
     def get_maintenance_contacts_count(self, obj):
@@ -66,7 +66,7 @@ class UnitAdmin(admin.ModelAdmin):
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ['user', 'phone', 'city', 'emergency_contact_name']
+    list_display = ['user', 'phone', 'city']
     list_filter = ['city', 'state']
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'phone']
 
