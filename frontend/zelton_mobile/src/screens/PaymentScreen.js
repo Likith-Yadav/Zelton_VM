@@ -68,9 +68,11 @@ const PaymentScreen = ({ navigation, route }) => {
       console.log("Starting PhonePe payment processing...");
 
       // Initiate PhonePe subscription payment
+      const isUpgrade = route.params?.isUpgrade || false;
       const response = await ownerSubscriptionAPI.initiateSubscriptionPayment(
         subscriptionData.plan.id,
-        subscriptionData.billingCycle
+        subscriptionData.billingCycle,
+        isUpgrade
       );
 
       if (response.data.success) {

@@ -8,10 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import InputField from "../components/InputField";
+import PhoneInputField from "../components/PhoneInputField";
 import GradientButton from "../components/GradientButton";
 import {
   colors,
@@ -59,6 +61,7 @@ const OwnerRegistrationScreen = ({ navigation, route }) => {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // Get registration data from previous screens (OTP verification)
   const registrationData = route?.params?.registrationData;
@@ -75,6 +78,16 @@ const OwnerRegistrationScreen = ({ navigation, route }) => {
       }));
     }
   }, [registrationData]);
+
+  // Track keyboard visibility to add extra bottom space so inputs are not hidden
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const steps = [
     { id: 1, title: "Personal Info", subtitle: "Basic information about you" },
@@ -289,12 +302,11 @@ const OwnerRegistrationScreen = ({ navigation, route }) => {
               leftIcon="mail"
               required
             />
-            <InputField
+            <PhoneInputField
               label="Phone Number"
               placeholder="Enter your phone number"
               value={formData.phone}
               onChangeText={(value) => handleInputChange("phone", value)}
-              keyboardType="phone-pad"
               error={errors.phone}
               leftIcon="call"
               required
@@ -527,7 +539,8 @@ const OwnerRegistrationScreen = ({ navigation, route }) => {
       end={{ x: 1, y: 1 }}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
         style={styles.keyboardView}
       >
         {/* Header */}
@@ -578,34 +591,37 @@ const OwnerRegistrationScreen = ({ navigation, route }) => {
         {/* Form Content */}
         <ScrollView
           style={styles.formContainer}
-          contentContainerStyle={styles.formContent}
+          contentContainerStyle={[
+            styles.formContent,
+            keyboardVisible ? { paddingBottom: spacing.xxl * 2 } : null,
+          ]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {renderStepContent()}
-        </ScrollView>
-
-        {/* Navigation Buttons */}
-        <View style={styles.navigationContainer}>
-          <View style={styles.buttonRow}>
-            {currentStep > 1 && (
+          {/* Navigation Buttons inside scrollable area */}
+          <View style={[styles.navigationContainer, keyboardVisible ? { paddingBottom: spacing.xl } : null]}>
+            <View style={styles.buttonRow}>
+              {currentStep > 1 && (
+                <GradientButton
+                  title="Previous"
+                  onPress={handlePrevious}
+                  variant="secondary"
+                  style={[styles.navButton, styles.previousButton]}
+                />
+              )}
               <GradientButton
-                title="Previous"
-                onPress={handlePrevious}
-                variant="secondary"
-                style={[styles.navButton, styles.previousButton]}
+                title={currentStep === 4 ? "Register" : "Next"}
+                onPress={handleNext}
+                loading={loading}
+                style={[
+                  styles.navButton,
+                  currentStep === 1 && styles.nextButtonFull,
+                ]}
               />
-            )}
-            <GradientButton
-              title={currentStep === 4 ? "Complete Registration" : "Next"}
-              onPress={handleNext}
-              loading={loading}
-              style={[
-                styles.navButton,
-                currentStep === 1 && styles.nextButtonFull,
-              ]}
-            />
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
   );
@@ -698,6 +714,15 @@ const styles = StyleSheet.create({
   navButton: {
     flex: 1,
     marginHorizontal: spacing.xs,
+    minHeight: 48,
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   previousButton: {
     marginRight: spacing.sm,

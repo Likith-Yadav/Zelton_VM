@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,13 +27,13 @@ import { ownerAPI } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
-const PricingScreen = ({ navigation }) => {
+const PricingScreen = ({ navigation, route }) => {
   const [selectedPlan, setSelectedPlan] = useState(null);
-
   const [billingCycle, setBillingCycle] = useState("monthly"); // 'monthly' or 'yearly'
   const [propertyCount, setPropertyCount] = useState("1-20");
   const [pricingPlans, setPricingPlans] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [scrollY] = useState(new Animated.Value(0));
 
   // Convert property count range to numeric value for comparison
   const getPropertyCountValue = (count) => {
@@ -58,6 +59,15 @@ const PricingScreen = ({ navigation }) => {
     console.log("PricingScreen mounted, loading pricing plans...");
     loadPricingPlans();
   }, [propertyCount]);
+
+  useEffect(() => {
+    if (route.params?.isUpgrade) {
+      // Pre-select the suggested plan
+      if (route.params.suggestedPlan) {
+        setSelectedPlan(route.params.suggestedPlan.id);
+      }
+    }
+  }, [route.params]);
 
   const loadPricingPlans = async () => {
     try {
@@ -147,6 +157,7 @@ const PricingScreen = ({ navigation }) => {
       if (!userData.success || !userData.data.user) {
         // Use a default user ID if no user data found
         const userId = 1; // Default user ID
+        const isUpgrade = route.params?.isUpgrade || false;
         navigation.navigate("Payment", {
           subscriptionData: {
             plan: plan,
@@ -157,6 +168,7 @@ const PricingScreen = ({ navigation }) => {
                 : plan.monthly_price,
             userId: userId,
           },
+          isUpgrade: isUpgrade,
         });
         return;
       }
@@ -164,6 +176,7 @@ const PricingScreen = ({ navigation }) => {
       const userId = userData.data.user.id;
 
       // Navigate directly to payment without confirmation dialog
+      const isUpgrade = route.params?.isUpgrade || false;
       navigation.navigate("Payment", {
         subscriptionData: {
           plan: plan,
@@ -172,6 +185,7 @@ const PricingScreen = ({ navigation }) => {
             billingCycle === "yearly" ? plan.yearly_price : plan.monthly_price,
           userId: userId,
         },
+        isUpgrade: isUpgrade,
       });
     } catch (error) {
       console.error("Subscription error:", error);
@@ -270,6 +284,18 @@ const PricingScreen = ({ navigation }) => {
     );
   };
 
+  const stickyToggleOpacity = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const stickyToggleTranslateY = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [-60, 0],
+    extrapolate: 'clamp',
+  });
+
   return (
     <LinearGradient
       colors={gradients.background}
@@ -277,7 +303,64 @@ const PricingScreen = ({ navigation }) => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      {/* Header */}
+      {/* Sticky Billing Toggle */}
+      <Animated.View 
+        style={[
+          styles.stickyToggleContainer,
+          {
+            opacity: stickyToggleOpacity,
+            transform: [{ translateY: stickyToggleTranslateY }],
+          },
+        ]}
+      >
+        <View style={styles.billingToggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.billingToggle,
+              billingCycle === "monthly" && styles.activeBillingToggle,
+            ]}
+            onPress={() => setBillingCycle("monthly")}
+          >
+            <Text
+              style={[
+                styles.billingToggleText,
+                billingCycle === "monthly" && styles.activeBillingToggleText,
+              ]}
+            >
+              Monthly
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.billingToggle,
+              billingCycle === "yearly" && styles.activeBillingToggle,
+            ]}
+            onPress={() => setBillingCycle("yearly")}
+          >
+            <Text
+              style={[
+                styles.billingToggleText,
+                billingCycle === "yearly" && styles.activeBillingToggleText,
+              ]}
+            >
+              Yearly
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+        {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -360,13 +443,10 @@ const PricingScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Pricing Plans */}
-      <ScrollView
-        style={styles.pricingContainer}
-        contentContainerStyle={styles.pricingContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {pricingPlans.map(renderPricingCard)}
+        {/* Pricing Plans */}
+        <View style={styles.pricingContainer}>
+          {pricingPlans.map(renderPricingCard)}
+        </View>
       </ScrollView>
 
       {/* Subscribe Button */}
@@ -386,6 +466,24 @@ const PricingScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  stickyToggleContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    backgroundColor: colors.background,
+    paddingTop: 60,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    ...shadows.md,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
   },
   header: {
     paddingTop: 60,
@@ -480,9 +578,6 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   pricingContainer: {
-    flex: 1,
-  },
-  pricingContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },

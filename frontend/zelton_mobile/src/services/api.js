@@ -8,13 +8,21 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json",
+    "Accept": "application/json",
   },
-  // Add these for better error handling
+  // Allow all status codes to be handled properly
   validateStatus: function (status) {
-    return status >= 200 && status < 300; // default
+    return status >= 200 && status < 600; // Allow all status codes
   },
-  // Enable credentials for session management
+  // Enable credentials for session-based OTP verification
   withCredentials: true,
+  // Add headers to help with CSRF
+  headers: {
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  },
 });
 
 // Request interceptor to add auth token
@@ -34,6 +42,16 @@ api.interceptors.request.use(
         (config.url.includes("/api/auth/") ||
           config.url.includes("/api/pricing-plans/"))
       ) {
+        // For auth endpoints, ensure clean headers
+        config.headers["Content-Type"] = "application/json";
+        
+        // Only disable credentials for login/register endpoints (not OTP endpoints)
+        if (config.url.includes("/api/auth/login/") || 
+            config.url.includes("/api/auth/register/")) {
+          config.withCredentials = false; // Disable credentials for login/register
+        } else {
+          config.withCredentials = true; // Enable credentials for OTP endpoints
+        }
         return config;
       }
 
@@ -137,11 +155,15 @@ export const ownerAPI = {
 
 // Owner Subscription API
 export const ownerSubscriptionAPI = {
-  initiateSubscriptionPayment: (pricingPlanId, period = "monthly") =>
-    api.post("/api/owner-subscriptions/initiate_payment/", {
+  initiateSubscriptionPayment: (pricingPlanId, period = "monthly", isUpgrade = false) => {
+    const endpoint = isUpgrade 
+      ? "/api/owner-subscriptions/initiate_upgrade/"
+      : "/api/owner-subscriptions/initiate_payment/";
+    return api.post(endpoint, {
       pricing_plan_id: pricingPlanId,
-      period,
-    }),
+      period: period,
+    });
+  },
 
   verifySubscriptionPayment: (merchantOrderId) =>
     api.get(`/api/owner-subscriptions/verify-payment/${merchantOrderId}/`),
@@ -155,6 +177,10 @@ export const ownerSubscriptionAPI = {
   getActiveSubscription: () => api.get("/api/owner-subscriptions/active/"),
 
   getSubscriptionPayments: () => api.get("/api/owner-subscriptions/"),
+
+  // Add new methods
+  checkLimits: () => api.get("/api/owner-subscriptions/check_limits/"),
+  getAvailablePlans: () => api.get("/api/owner-subscriptions/available_plans/"),
 };
 
 // Property API

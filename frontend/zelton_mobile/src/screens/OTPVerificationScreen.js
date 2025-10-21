@@ -154,7 +154,8 @@ const OTPVerificationScreen = ({ navigation, route }) => {
           },
         ]);
       } else {
-        Alert.alert("Invalid OTP", response.data.error || "The OTP you entered is incorrect. Please try again.");
+        const errorMessage = response.data.error || "The OTP you entered is incorrect. Please try again.";
+        Alert.alert("Invalid OTP", errorMessage);
         // Clear OTP inputs
         setOtp(["", "", "", "", "", ""]);
         inputRefs.current[0]?.focus();

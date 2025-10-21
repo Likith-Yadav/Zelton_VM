@@ -30,10 +30,6 @@ import DataService from "../services/dataService";
 const DOCUMENT_TYPES = [
   { key: "aadhaar", label: "Aadhaar Card", required: true },
   { key: "rental_agreement", label: "Rental Agreement", required: true },
-  { key: "pan_card", label: "PAN Card", required: false },
-  { key: "police_verification", label: "Police Verification", required: false },
-  { key: "passport", label: "Passport", required: false },
-  { key: "other", label: "Other", required: false },
 ];
 
 const TenantDocumentsScreen = ({ navigation }) => {
@@ -94,14 +90,21 @@ const TenantDocumentsScreen = ({ navigation }) => {
 
   const handleFilePicker = async () => {
     try {
+      console.log("File picker button pressed");
       const result = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf", "image/jpeg", "image/png"],
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled) return;
+      console.log("Document picker result:", result);
+
+      if (result.canceled) {
+        console.log("File picker was canceled");
+        return;
+      }
 
       const file = result.assets[0];
+      console.log("Selected file:", file);
 
       // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
@@ -118,7 +121,18 @@ const TenantDocumentsScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error("Error picking file:", error);
-      Alert.alert("Error", "Failed to pick file");
+      Alert.alert(
+        "Error", 
+        "Failed to pick file. Please try again.\n\nMake sure you have the latest version of the app and proper permissions.",
+        [
+          { text: "OK", style: "default" },
+          { 
+            text: "Try Again", 
+            style: "default",
+            onPress: () => handleFilePicker()
+          }
+        ]
+      );
     }
   };
 
@@ -179,12 +193,14 @@ const TenantDocumentsScreen = ({ navigation }) => {
       const response = await DataService.downloadTenantDocument(document.id);
       console.log("Download response:", response);
       console.log("Response data:", JSON.stringify(response.data, null, 2));
+      console.log("Response success:", response.success);
+      console.log("Response data success:", response.data?.success);
 
-      if (response.success) {
+      if (response.success && response.data.success) {
         // Handle response structure - backend returns flat structure
-        const downloadUrl = response.data?.download_url;
-        const fileName = response.data?.file_name;
-        const debugInfo = response.data?.debug_info;
+        const downloadUrl = response.data.download_url;
+        const fileName = response.data.file_name;
+        const debugInfo = response.data.debug_info;
 
         console.log("Download URL:", downloadUrl);
         console.log("File name:", fileName);
@@ -379,6 +395,7 @@ const TenantDocumentsScreen = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.filePickerButton}
                 onPress={handleFilePicker}
+                activeOpacity={0.7}
               >
                 <Ionicons
                   name="document-attach"
@@ -453,12 +470,7 @@ const TenantDocumentsScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Documents</Text>
-        <TouchableOpacity
-          style={styles.uploadButton}
-          onPress={() => setShowUploadModal(true)}
-        >
-          <Ionicons name="add" size={24} color={colors.primary} />
-        </TouchableOpacity>
+
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -741,16 +753,16 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: colors.surface,
     borderRadius: 20,
-    padding: spacing.lg,
+    padding: spacing.md,
     width: "90%",
-    maxHeight: "85%",
-    flex: 1,
+    maxHeight: "90%",
+    minHeight: "60%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   modalTitle: {
     ...typography.h5,
@@ -761,7 +773,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   documentTypeSelector: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   selectorTitle: {
     ...typography.h6,
@@ -801,10 +813,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
+    alignItems: "center",
   },
   cancelButton: {
     flex: 1,
     marginRight: spacing.sm,
+    minHeight: 48,
+  },
+  uploadButton: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    minHeight: 48,
   },
   noticeCard: {
     marginBottom: spacing.lg,
@@ -829,7 +848,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   fileSelectionSection: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
   fileSelectionTitle: {
     ...typography.h6,
@@ -841,17 +861,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primaryLight + "20", // Semi-transparent primary color
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: "solid", // Changed from dashed to solid
+    minHeight: 50,
+    ...shadows.md,
   },
   filePickerText: {
     ...typography.body1,
-    color: colors.text,
+    color: colors.primary,
     marginLeft: spacing.sm,
     flex: 1,
+    fontWeight: "600",
   },
   fileInfo: {
     marginTop: spacing.sm,
@@ -866,10 +889,11 @@ const styles = StyleSheet.create({
   },
   modalScrollView: {
     flex: 1,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   modalScrollContent: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
+    flexGrow: 1,
   },
 });
 

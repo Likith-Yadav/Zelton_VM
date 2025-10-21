@@ -11,16 +11,16 @@ class Command(BaseCommand):
         PricingPlan.objects.all().delete()
         self.stdout.write('Cleared existing pricing plans...')
 
-        # Define pricing plans based on the provided structure
+        # Define pricing plans based on units (not properties)
         pricing_plans = [
             {
                 'name': 'Starter Plan',
-                'min_properties': 1,
-                'max_properties': 20,
+                'min_units': 1,
+                'max_units': 20,
                 'monthly_price': Decimal('2000.00'),
                 'yearly_price': Decimal('22000.00'),
                 'features': [
-                    'Up to 20 properties',
+                    'Up to 20 units',
                     'Basic property management',
                     'Tenant management',
                     'Payment tracking',
@@ -29,12 +29,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Growth Plan',
-                'min_properties': 21,
-                'max_properties': 40,
+                'min_units': 21,
+                'max_units': 40,
                 'monthly_price': Decimal('4000.00'),
                 'yearly_price': Decimal('44000.00'),
                 'features': [
-                    'Up to 40 properties',
+                    'Up to 40 units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -44,12 +44,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Business Plan',
-                'min_properties': 41,
-                'max_properties': 60,
+                'min_units': 41,
+                'max_units': 60,
                 'monthly_price': Decimal('6000.00'),
                 'yearly_price': Decimal('66000.00'),
                 'features': [
-                    'Up to 60 properties',
+                    'Up to 60 units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -60,12 +60,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Enterprise Plan',
-                'min_properties': 61,
-                'max_properties': 80,
+                'min_units': 61,
+                'max_units': 80,
                 'monthly_price': Decimal('8000.00'),
                 'yearly_price': Decimal('88000.00'),
                 'features': [
-                    'Up to 80 properties',
+                    'Up to 80 units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -77,12 +77,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Professional Plan',
-                'min_properties': 81,
-                'max_properties': 100,
+                'min_units': 81,
+                'max_units': 100,
                 'monthly_price': Decimal('10000.00'),
                 'yearly_price': Decimal('110000.00'),
                 'features': [
-                    'Up to 100 properties',
+                    'Up to 100 units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -95,12 +95,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Premium Plan',
-                'min_properties': 101,
-                'max_properties': 120,
+                'min_units': 101,
+                'max_units': 120,
                 'monthly_price': Decimal('12000.00'),
                 'yearly_price': Decimal('132000.00'),
                 'features': [
-                    'Up to 120 properties',
+                    'Up to 120 units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -114,12 +114,12 @@ class Command(BaseCommand):
             },
             {
                 'name': 'Ultimate Plan',
-                'min_properties': 121,
-                'max_properties': 999999,  # Unlimited
+                'min_units': 121,
+                'max_units': 999999,  # Unlimited
                 'monthly_price': Decimal('14000.00'),
                 'yearly_price': Decimal('154000.00'),
                 'features': [
-                    'Unlimited properties',
+                    'Unlimited units',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -144,7 +144,7 @@ class Command(BaseCommand):
             if created:
                 created_count += 1
                 self.stdout.write(
-                    self.style.SUCCESS(f'Created: {plan.name} - {plan.min_properties}-{plan.max_properties} properties')
+                    self.style.SUCCESS(f'Created: {plan.name} - {plan.min_units}-{plan.max_units} units')
                 )
             else:
                 self.stdout.write(
@@ -158,10 +158,10 @@ class Command(BaseCommand):
         # Display summary
         self.stdout.write('\nPricing Plans Summary:')
         self.stdout.write('=' * 50)
-        for plan in PricingPlan.objects.all().order_by('min_properties'):
+        for plan in PricingPlan.objects.all().order_by('min_units'):
             savings = plan.monthly_price * 12 - plan.yearly_price
             self.stdout.write(
-                f'{plan.name}: {plan.min_properties}-{plan.max_properties} properties'
+                f'{plan.name}: {plan.min_units}-{plan.max_units} units'
             )
             self.stdout.write(f'  Monthly: Rs.{plan.monthly_price}')
             self.stdout.write(f'  Yearly: Rs.{plan.yearly_price} (Save Rs.{savings})')

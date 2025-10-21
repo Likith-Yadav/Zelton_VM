@@ -1,6 +1,6 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from .models import Unit, Property, Owner, TenantKey, Payment
+from .models import Unit, Property, Owner, TenantKey, Payment, OwnerSubscriptionPayment
 
 
 @receiver(post_save, sender=Unit)
@@ -8,13 +8,23 @@ def handle_unit_creation_and_updates(sender, instance, created, **kwargs):
     """Handle unit creation and updates"""
     if created:
         # Create tenant key for new unit
-        from django.utils import timezone
         TenantKey.objects.create(
             property=instance.property,
-            unit=instance,
-            expires_at=timezone.now() + timezone.timedelta(days=30)
+            unit=instance
         )
         print(f"Created tenant key for new unit: {instance.unit_number}")
+        
+        # Additional security check: Verify owner can still add units
+        owner = instance.property.owner
+        if not owner.can_add_unit:
+            # This should not happen if the API validation is working correctly
+            # But we'll log it as a security concern
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"SECURITY ALERT: Unit {instance.id} created for owner {owner.id} "
+                f"who has reached their limit ({owner.calculated_total_units}/{owner.max_units_allowed})"
+            )
     
     # Update property unit counts
     if instance.property:
@@ -71,3 +81,25 @@ def update_unit_remaining_amount_on_payment(sender, instance, created, **kwargs)
     if instance.tenant and instance.unit:
         # Update the remaining amount for the unit
         instance.unit.update_remaining_amount(instance.tenant)
+
+
+@receiver(post_save, sender=OwnerSubscriptionPayment)
+def handle_subscription_payment_completion(sender, instance, created, **kwargs):
+    """Handle subscription payment completion and update owner limits"""
+    if not created and instance.status == 'completed':
+        # Update owner's subscription plan
+        owner = instance.owner
+        owner.subscription_plan = instance.pricing_plan
+        owner.subscription_status = 'active'
+        owner.subscription_start_date = instance.subscription_start_date
+        owner.subscription_end_date = instance.subscription_end_date
+        owner.save()
+        
+        # Log the upgrade for audit purposes
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(
+            f"Subscription updated for owner {owner.id}: "
+            f"Plan changed to {instance.pricing_plan.name} "
+            f"(max units: {instance.pricing_plan.max_units})"
+        )

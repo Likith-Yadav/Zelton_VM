@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db.models import Q, Sum, Count, Avg
 from django.db import models
@@ -363,14 +364,8 @@ class PropertyViewSet(viewsets.ModelViewSet):
             # Check if there's already an unused key for this unit
             existing_key = TenantKey.objects.filter(unit=unit, is_used=False).first()
             if existing_key:
-                # Check if key has expired
-                if existing_key.expires_at < timezone.now():
-                    # Key expired, create new one
-                    existing_key.delete()
-                    tenant_key = TenantKey.objects.create(property=property_obj, unit=unit)
-                else:
-                    # Key still valid, return existing one
-                    tenant_key = existing_key
+                # Key still valid, return existing one
+                tenant_key = existing_key
             else:
                 # No existing key, create new one
                 tenant_key = TenantKey.objects.create(property=property_obj, unit=unit)
@@ -422,6 +417,43 @@ class UnitViewSet(viewsets.ModelViewSet):
         
         try:
             property_obj = Property.objects.get(id=property_id, owner__user=self.request.user)
+            owner = property_obj.owner
+            
+            # Check if owner can add more units based on subscription plan
+            try:
+                owner.validate_unit_limit()
+            except ValueError as e:
+                # Get suggested upgrade plan for detailed error response
+                suggested_plan = owner.suggested_plan_upgrade
+                
+                error_data = {
+                    'error': 'Unit limit exceeded',
+                    'message': str(e),
+                    'current_units': owner.calculated_total_units,
+                    'max_units_allowed': owner.max_units_allowed,
+                    'subscription_plan': owner.subscription_plan_name,
+                    'upgrade_required': True
+                }
+                
+                if suggested_plan:
+                    error_data.update({
+                        'suggested_plan': {
+                            'id': suggested_plan.id,
+                            'name': suggested_plan.name,
+                            'max_units': suggested_plan.max_units,
+                            'monthly_price': float(suggested_plan.monthly_price),
+                            'yearly_price': float(suggested_plan.yearly_price),
+                            'features': suggested_plan.features
+                        },
+                        'upgrade_message': f'Upgrade to {suggested_plan.name} to add up to {suggested_plan.max_units} units.'
+                    })
+                else:
+                    error_data.update({
+                        'upgrade_message': 'Please contact support for a custom plan that supports your unit count.'
+                    })
+                
+                raise serializers.ValidationError(error_data)
+            
             serializer.save(property=property_obj)
         except Property.DoesNotExist:
             raise serializers.ValidationError({'property': 'Property not found or does not belong to you.'})
@@ -653,7 +685,7 @@ class TenantViewSet(viewsets.ModelViewSet):
             all_keys = TenantKey.objects.filter(key=key)
             print("Keys with this value:", all_keys.count())
             for tk in all_keys:
-                print(f"  Key: {tk.key}, Used: {tk.is_used}, Expires: {tk.expires_at}")
+                print(f"  Key: {tk.key}, Used: {tk.is_used}")
             
             # First check if any key with this value exists
             if not all_keys.exists():
@@ -664,16 +696,10 @@ class TenantViewSet(viewsets.ModelViewSet):
             try:
                 tenant_key = TenantKey.objects.get(key=key, is_used=False)
                 print("Tenant key found:", tenant_key)
-                print("Tenant key expires at:", tenant_key.expires_at)
                 print("Current time:", timezone.now())
             except TenantKey.DoesNotExist:
                 print("Tenant key not found or already used")
                 return Response({'error': 'Tenant key not found or already used'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check if key has expired
-            if tenant_key.expires_at < timezone.now():
-                print("Tenant key has expired")
-                return Response({'error': 'Tenant key has expired'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Handle tenant creation/authentication
             tenant = None
@@ -798,7 +824,6 @@ class TenantViewSet(viewsets.ModelViewSet):
                     'key': tenant_key.key,
                     'is_used': tenant_key.is_used,
                     'used_at': tenant_key.used_at,
-                    'expires_at': tenant_key.expires_at,
                 },
                 'user': {
                     'id': tenant.user.id,
@@ -927,19 +952,6 @@ class TenantViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def profile(self, request):
-        """Get owner profile information"""
-        owner = self.get_queryset().first()
-        if not owner:
-            return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = OwnerSerializer(owner)
-        return Response({
-            'success': True,
-            'data': serializer.data
-        })
-
-    @action(detail=False, methods=['get'])
-    def profile(self, request):
         """Get tenant profile information"""
         tenant = self.get_queryset().first()
         if not tenant:
@@ -974,23 +986,28 @@ class TenantViewSet(viewsets.ModelViewSet):
             if 'document_file' not in request.FILES:
                 return Response({'error': 'Document file is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if document of this type already exists
+            # Check if document of this type already exists and replace it
             existing_document = TenantDocument.objects.filter(
                 tenant=tenant, 
                 document_type=document_type
             ).first()
 
             if existing_document:
-                return Response({
-                    'error': f'Document of type {document_type} already exists. Please delete the existing document first.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                # Delete the existing document file from storage
+                if existing_document.document_file:
+                    existing_document.document_file.delete(save=False)
+                # Delete the existing document record
+                existing_document.delete()
 
             # Create new document
+            document_file = request.FILES['document_file']
             document = TenantDocument.objects.create(
                 tenant=tenant,
                 unit=current_unit,
                 document_type=document_type,
-                document_file=request.FILES['document_file'],
+                document_file=document_file,
+                file_name=document_file.name,
+                file_size=document_file.size,
                 is_required=document_type in ['aadhaar', 'rental_agreement']  # Mark required documents
             )
 
@@ -1027,14 +1044,21 @@ class TenantViewSet(viewsets.ModelViewSet):
     def download_document(self, request, document_id=None):
         """Download a specific document"""
         try:
+            # Get the current tenant
             tenant = self.get_queryset().first()
             if not tenant:
                 return Response({'error': 'Tenant profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
+            print(f"Looking for document ID: {document_id}")
+            print(f"Tenant: {tenant}")
+            
+            # Get the document for this tenant
             document = TenantDocument.objects.filter(
                 id=document_id, 
                 tenant=tenant
             ).first()
+
+            print(f"Document found: {document}")
 
             if not document:
                 return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -1045,7 +1069,7 @@ class TenantViewSet(viewsets.ModelViewSet):
             # Return file URL for download
             # Use the correct domain instead of request.build_absolute_uri()
             from django.conf import settings
-            base_url = settings.BASE_URL
+            base_url = getattr(settings, 'BASE_URL', 'https://api.zelton.in')
             document_url = f"{base_url}{document.document_file.url}"
             
             # Debug logging
@@ -1053,15 +1077,23 @@ class TenantViewSet(viewsets.ModelViewSet):
             print(f"Constructed URL: {document_url}")
             print(f"File exists: {document.document_file.storage.exists(document.document_file.name)}")
             
+            # Get file name and size, with fallbacks
+            file_name = document.file_name or document.document_file.name.split('/')[-1] if document.document_file else 'unknown'
+            file_size = document.file_size or (document.document_file.size if document.document_file else 0)
+            
             return Response({
                 'success': True,
                 'download_url': document_url,
-                'file_name': document.file_name,
-                'file_size': document.file_size,
+                'file_name': file_name,
+                'file_size': file_size,
                 'debug_info': {
                     'relative_url': document.document_file.url,
                     'absolute_url': document_url,
-                    'file_exists': document.document_file.storage.exists(document.document_file.name)
+                    'file_exists': document.document_file.storage.exists(document.document_file.name),
+                    'model_file_name': document.file_name,
+                    'model_file_size': document.file_size,
+                    'actual_file_name': document.document_file.name if document.document_file else None,
+                    'actual_file_size': document.document_file.size if document.document_file else None
                 }
             })
 
@@ -1993,6 +2025,105 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
         return OwnerSubscriptionPayment.objects.none()
 
     @action(detail=False, methods=['post'])
+    def initiate_upgrade(self, request):
+        """Initiate subscription upgrade payment"""
+        try:
+            # Get owner profile
+            if not hasattr(request.user, 'owner_profile'):
+                return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            owner = request.user.owner_profile
+            pricing_plan_id = request.data.get('pricing_plan_id')
+            period = request.data.get('period', 'monthly')
+            
+            if not pricing_plan_id:
+                return Response({'error': 'Pricing plan ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                pricing_plan = PricingPlan.objects.get(id=pricing_plan_id, is_active=True)
+            except PricingPlan.DoesNotExist:
+                return Response({'error': 'Pricing plan not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Validate that this is actually an upgrade
+            if owner.subscription_plan and pricing_plan.max_units <= owner.subscription_plan.max_units:
+                return Response({
+                    'error': 'Invalid upgrade',
+                    'message': 'Selected plan does not provide more units than current plan'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if current unit count fits in the new plan
+            if owner.calculated_total_units > pricing_plan.max_units:
+                return Response({
+                    'error': 'Plan insufficient',
+                    'message': f'Your current unit count ({owner.calculated_total_units}) exceeds the maximum units allowed by this plan ({pricing_plan.max_units})'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate amount based on period and include 18% GST
+            if period == 'yearly':
+                base_amount = pricing_plan.yearly_price
+            else:
+                base_amount = pricing_plan.monthly_price
+
+            base_decimal = Decimal(str(base_amount))
+            gst_amount = (base_decimal * Decimal('0.18')).quantize(Decimal('0.01'))
+            total_amount = (base_decimal + gst_amount).quantize(Decimal('0.01'))
+            
+            # Calculate due date
+            today = timezone.now().date()
+            if period == 'yearly':
+                due_date = today + timedelta(days=365)
+            else:
+                due_date = today + timedelta(days=30)
+            
+            # Create subscription payment record
+            subscription_payment = OwnerSubscriptionPayment.objects.create(
+                owner=owner,
+                pricing_plan=pricing_plan,
+                amount=total_amount,
+                payment_type='upgrade',
+                status='pending',
+                due_date=due_date,
+                subscription_period=period
+            )
+            
+            # Initiate PhonePe payment
+            phonepe_response = PhonePeService.initiate_owner_subscription_payment(owner, pricing_plan, period)
+            
+            if not phonepe_response['success']:
+                subscription_payment.status = 'failed'
+                subscription_payment.save()
+                return Response({
+                    'success': False,
+                    'error': phonepe_response['error'],
+                    'error_code': phonepe_response.get('error_code', 'UNKNOWN')
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update subscription payment with PhonePe details
+            subscription_payment.merchant_order_id = phonepe_response['merchant_order_id']
+            subscription_payment.phonepe_order_id = phonepe_response['order_id']
+            subscription_payment.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Subscription upgrade payment initiated successfully',
+                'merchant_order_id': phonepe_response['merchant_order_id'],
+                'order_id': phonepe_response['order_id'],
+                'redirect_url': phonepe_response['redirect_url'],
+                'expire_at': phonepe_response['expire_at'],
+                'state': phonepe_response['state'],
+                'subscription_payment_id': subscription_payment.id,
+                'upgrade_details': {
+                    'from_plan': owner.subscription_plan_name,
+                    'to_plan': pricing_plan.name,
+                    'new_max_units': pricing_plan.max_units,
+                    'current_units': owner.calculated_total_units
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
     def initiate_payment(self, request):
         """Initiate subscription payment for owner"""
         try:
@@ -2012,11 +2143,15 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
             except PricingPlan.DoesNotExist:
                 return Response({'error': 'Pricing plan not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Calculate amount based on period
+            # Calculate amount based on period and include 18% GST
             if period == 'yearly':
-                amount = pricing_plan.yearly_price
+                base_amount = pricing_plan.yearly_price
             else:
-                amount = pricing_plan.monthly_price
+                base_amount = pricing_plan.monthly_price
+
+            base_decimal = Decimal(str(base_amount))
+            gst_amount = (base_decimal * Decimal('0.18')).quantize(Decimal('0.01'))
+            total_amount = (base_decimal + gst_amount).quantize(Decimal('0.01'))
             
             # Calculate due date (next month)
             today = timezone.now().date()
@@ -2029,7 +2164,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
             subscription_payment = OwnerSubscriptionPayment.objects.create(
                 owner=owner,
                 pricing_plan=pricing_plan,
-                amount=amount,
+                amount=total_amount,
                 payment_type='subscription',
                 status='pending',
                 due_date=due_date,
@@ -2190,6 +2325,98 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
+    def check_limits(self, request):
+        """Check current subscription limits and suggest upgrades if needed"""
+        try:
+            owner = Owner.objects.filter(user=request.user).first()
+            if not owner:
+                return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Get current subscription details
+            current_units = owner.calculated_total_units
+            max_units = owner.max_units_allowed
+            can_add_unit = owner.can_add_unit
+            is_within_limits = owner.is_within_plan_limits
+            suggested_plan = owner.suggested_plan_upgrade
+            
+            response_data = {
+                'current_units': current_units,
+                'max_units_allowed': max_units,
+                'can_add_unit': can_add_unit,
+                'is_within_limits': is_within_limits,
+                'subscription_plan': {
+                    'id': owner.subscription_plan.id if owner.subscription_plan else None,
+                    'name': owner.subscription_plan_name,
+                    'status': owner.subscription_status
+                } if owner.subscription_plan else None,
+                'upgrade_required': not can_add_unit,
+                'suggested_plan': None
+            }
+            
+            if suggested_plan:
+                response_data['suggested_plan'] = {
+                    'id': suggested_plan.id,
+                    'name': suggested_plan.name,
+                    'min_units': suggested_plan.min_units,
+                    'max_units': suggested_plan.max_units,
+                    'monthly_price': float(suggested_plan.monthly_price),
+                    'yearly_price': float(suggested_plan.yearly_price),
+                    'features': suggested_plan.features
+                }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def available_plans(self, request):
+        """Get all available pricing plans for upgrade"""
+        try:
+            owner = Owner.objects.filter(user=request.user).first()
+            if not owner:
+                return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            current_units = owner.calculated_total_units
+            current_plan = owner.subscription_plan
+            
+            # Get all active plans that can accommodate current unit count
+            available_plans = PricingPlan.objects.filter(
+                is_active=True,
+                max_units__gte=current_units
+            ).exclude(
+                id=current_plan.id if current_plan else None
+            ).order_by('max_units')
+            
+            plans_data = []
+            for plan in available_plans:
+                plans_data.append({
+                    'id': plan.id,
+                    'name': plan.name,
+                    'min_units': plan.min_units,
+                    'max_units': plan.max_units,
+                    'monthly_price': float(plan.monthly_price),
+                    'yearly_price': float(plan.yearly_price),
+                    'features': plan.features,
+                    'is_recommended': plan.max_units >= current_units and (
+                        not current_plan or plan.max_units > current_plan.max_units
+                    )
+                })
+            
+            return Response({
+                'current_plan': {
+                    'id': current_plan.id if current_plan else None,
+                    'name': owner.subscription_plan_name,
+                    'max_units': current_plan.max_units if current_plan else 0
+                },
+                'current_units': current_units,
+                'available_plans': plans_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
     def active(self, request):
         """Get active subscription details"""
         try:
@@ -2197,28 +2424,55 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
             if not owner:
                 return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Get active subscription
-            active_subscription = OwnerSubscriptionPayment.objects.filter(
+            # Get active subscription payment
+            active_payment = OwnerSubscriptionPayment.objects.filter(
                 owner=owner,
-                status='completed',
-                subscription_end_date__gt=timezone.now()
+                status='completed'
             ).order_by('-created_at').first()
             
-            if not active_subscription:
+            if not active_payment:
                 return Response({
-                    'success': True,
                     'has_active_subscription': False,
                     'message': 'No active subscription found'
-                }, status=status.HTTP_200_OK)
+                }, status=status.HTTP_404_NOT_FOUND)
             
-            return Response({
-                'success': True,
-                'has_active_subscription': True,
-                'subscription': OwnerSubscriptionPaymentSerializer(active_subscription).data
-            }, status=status.HTTP_200_OK)
+            # Check if subscription is still valid
+            now = timezone.now()
+            is_active = (
+                active_payment.subscription_start_date <= now <= active_payment.subscription_end_date
+            )
+            
+            response_data = {
+                'has_active_subscription': is_active,
+                'subscription_payment': OwnerSubscriptionPaymentSerializer(active_payment).data,
+                'owner_limits': {
+                    'current_units': owner.calculated_total_units,
+                    'max_units_allowed': owner.max_units_allowed,
+                    'can_add_unit': owner.can_add_unit,
+                    'is_within_limits': owner.is_within_plan_limits
+                }
+            }
+            
+            if not is_active:
+                response_data['message'] = 'Subscription has expired'
+                response_data['expired_at'] = active_payment.subscription_end_date
+            
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def audit_limits(self, request):
+        """Admin endpoint to audit unit limits across all owners"""
+        # Only allow superusers to access this endpoint
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        
+        from .utils import audit_unit_limits
+        audit_results = audit_unit_limits()
+        
+        return Response(audit_results, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -2358,7 +2612,7 @@ class TenantDocumentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=False, methods=['get'], url_path='download/(?P<document_id>[^/.]+)')
+    @action(detail=False, methods=['get'], url_path='download/(?P<document_id>[^/.]+)/')
     def download_document(self, request, document_id=None):
         """Download a specific tenant document (owner access)"""
         try:
@@ -2380,13 +2634,18 @@ class TenantDocumentViewSet(viewsets.ModelViewSet):
                 # Return file URL for download
                 # Use the correct domain instead of request.build_absolute_uri()
                 from django.conf import settings
-                base_url = settings.BASE_URL
+                base_url = getattr(settings, 'BASE_URL', 'https://api.zelton.in')
                 document_url = f"{base_url}{document.document_file.url}"
+                
+                # Get file name and size, with fallbacks
+                file_name = document.file_name or document.document_file.name.split('/')[-1] if document.document_file else 'unknown'
+                file_size = document.file_size or (document.document_file.size if document.document_file else 0)
+                
                 return Response({
                     'success': True,
                     'download_url': document_url,
-                    'file_name': document.file_name,
-                    'file_size': document.file_size,
+                    'file_name': file_name,
+                    'file_size': file_size,
                     'tenant_name': document.tenant.user.get_full_name(),
                     'unit_number': document.unit.unit_number
                 })

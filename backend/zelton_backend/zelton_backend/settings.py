@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default="django-insecure-0d&8slnl6z&06&h(m(1d(2467_qk@+c)m0a0d5lo9=%b6_2-8%")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = True  # Force DEBUG mode for development
 
 ALLOWED_HOSTS = ['*']
 
@@ -62,7 +62,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 # SSL Security Settings (for production with HTTPS)
 # Only enable SSL redirects in production
-SECURE_SSL_REDIRECT = not DEBUG
+SECURE_SSL_REDIRECT = False  # Disable SSL redirect for development
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
@@ -302,5 +302,22 @@ else:
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 600  # 10 minutes (same as OTP expiry)
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-origin requests
+SESSION_COOKIE_SAMESITE = 'None'  # Allow cross-origin requests for mobile apps
 SESSION_COOKIE_SECURE = not DEBUG  # Set to True in production with HTTPS
+
+# Cache configuration - use local memory to avoid Redis issues
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000,
+        }
+    }
+}
+
+# Force database sessions and disable any cache-based session fallbacks
+SESSION_CACHE_ALIAS = None  # Disable cache-based sessions
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True

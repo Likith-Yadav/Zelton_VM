@@ -18,6 +18,9 @@ DEBUG = True
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Session settings for development
+SESSION_COOKIE_SAMESITE = 'None'  # Allow cross-origin requests for mobile apps
 SECURE_HSTS_SECONDS = 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False

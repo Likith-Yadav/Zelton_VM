@@ -65,6 +65,13 @@ class AuthViewSet(viewsets.ViewSet):
             
             # Create profile based on role
             if data['role'] == 'owner':
+                # Get the default pricing plan (Starter Plan for new owners)
+                from core.models import PricingPlan
+                default_plan = PricingPlan.objects.filter(
+                    name='Starter Plan', 
+                    is_active=True
+                ).first()
+                
                 owner = Owner.objects.create(
                     user=user,
                     phone=data.get('phone', ''),
@@ -74,7 +81,7 @@ class AuthViewSet(viewsets.ViewSet):
                     pincode=data.get('pincode', ''),
                     pan_number=data.get('pan_number') or None,
                     aadhar_number=data.get('aadhar_number') or None,
-                    subscription_plan='basic',
+                    subscription_plan=default_plan,
                     subscription_status='inactive'
                 )
                 serializer = OwnerSerializer(owner)
@@ -119,8 +126,12 @@ class AuthViewSet(viewsets.ViewSet):
     def login(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
+        
+        print(f"Login attempt: email={email}")
+        print(f"Request data: {request.data}")
 
         if not email or not password:
+            print("Missing email or password")
             return Response(
                 {'error': 'Email and password are required'}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -129,14 +140,26 @@ class AuthViewSet(viewsets.ViewSet):
         # Check if user exists first
         try:
             user = User.objects.get(email=email)
+            print(f"User found: {user.email}, is_active: {user.is_active}")
+            
+            # Check if user account is active
+            if not user.is_active:
+                print(f"User account is inactive: {email}")
+                return Response(
+                    {'error': 'Your account is inactive. Please contact support.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         except User.DoesNotExist:
+            print(f"User not found: {email}")
             return Response(
                 {'error': 'No account found with this email address'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Authenticate user
+        print(f"Attempting authentication for: {email}")
         user = authenticate(username=email, password=password)
+        print(f"Authentication result: {user is not None}")
         if user:
             login(request, user)
             
@@ -478,6 +501,9 @@ The ZeltonLivings Team'''
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Normalize email to lowercase for consistent session key
+        email = email.lower().strip()
+        
         # Generate 6-digit OTP
         import random
         verification_code = str(random.randint(100000, 999999))
@@ -551,14 +577,17 @@ The ZeltonLivings Team'''
         email = data.get('email')
         otp = data.get('otp')
         
-        print(f"OTP verification request: email={email}, otp={otp}")
-        print(f"Session keys: {list(request.session.keys())}")
-        
         if not email or not otp:
             return Response(
                 {'error': 'Email and OTP are required'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Normalize email to lowercase for consistent session key
+        email = email.lower().strip()
+        
+        print(f"OTP verification request: email={email}, otp={otp}")
+        print(f"Session keys: {list(request.session.keys())}")
         
         # Check if OTP exists and is valid
         stored_otp = request.session.get(f'otp_{email}')
@@ -568,7 +597,7 @@ The ZeltonLivings Team'''
         
         if not stored_otp or not stored_time:
             return Response(
-                {'error': 'OTP not found or expired'}, 
+                {'error': 'OTP not found or expired. Please request a new OTP.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -597,4 +626,222 @@ The ZeltonLivings Team'''
         return Response({
             'success': True,
             'message': 'OTP verified successfully'
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def send_reset_otp(self, request):
+        """Send OTP for password reset"""
+        data = request.data
+        email = data.get('email')
+        
+        print(f"Reset OTP request: email={email}")
+        
+        if not email:
+            return Response(
+                {'error': 'Email is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Normalize email to lowercase for consistent session key
+        email = email.lower().strip()
+        print(f"Normalized email: {email}")
+        
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'No account found with this email address'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Generate 6-digit OTP
+        import random
+        verification_code = str(random.randint(100000, 999999))
+        
+        # Store OTP in session with expiry time
+        request.session[f'reset_otp_{email}'] = verification_code
+        request.session[f'reset_otp_{email}_time'] = timezone.now().timestamp()
+        
+        # Send email
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            
+            subject = 'ZeltonLivings - Password Reset Verification'
+            message = f"""
+Hello {user.first_name},
+
+You requested a password reset for your ZeltonLivings account.
+
+Your verification code is: {verification_code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this password reset, please ignore this email.
+
+Best regards,
+ZeltonLivings Team
+"""
+            
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Password reset OTP sent successfully',
+                'debug_otp': verification_code  # Only for development
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Error sending password reset email: {str(e)}")
+            return Response({
+                'success': True,
+                'message': 'Password reset OTP sent successfully',
+                'debug_otp': verification_code  # Only for development
+            }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def verify_reset_otp(self, request):
+        """Verify OTP for password reset"""
+        data = request.data
+        email = data.get('email')
+        otp = data.get('otp')
+        
+        print(f"Verify reset OTP request: email={email}, otp={otp}")
+        print(f"Session keys: {list(request.session.keys())}")
+        
+        if not email or not otp:
+            return Response(
+                {'error': 'Email and OTP are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Normalize email to lowercase for consistent session key
+        email = email.lower().strip()
+        print(f"Normalized email: {email}")
+        
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'No account found with this email address'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if OTP exists and is valid
+        stored_otp = request.session.get(f'reset_otp_{email}')
+        stored_time = request.session.get(f'reset_otp_{email}_time')
+        
+        if not stored_otp or not stored_time:
+            return Response(
+                {'error': 'OTP not found or expired'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if OTP is expired (10 minutes)
+        current_time = timezone.now().timestamp()
+        if current_time - stored_time > 600:  # 10 minutes
+            # Clear expired OTP
+            del request.session[f'reset_otp_{email}']
+            del request.session[f'reset_otp_{email}_time']
+            return Response(
+                {'error': 'OTP expired'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify OTP
+        if stored_otp != otp:
+            return Response(
+                {'error': 'Invalid OTP'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Mark OTP as verified for password reset
+        request.session[f'reset_verified_{email}'] = True
+        request.session[f'reset_verified_{email}_time'] = timezone.now().timestamp()
+        
+        return Response({
+            'success': True,
+            'message': 'OTP verified successfully. You can now reset your password.'
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def reset_password(self, request):
+        """Reset password after OTP verification"""
+        data = request.data
+        email = data.get('email')
+        new_password = data.get('new_password')
+        
+        if not email or not new_password:
+            return Response(
+                {'error': 'Email and new password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Normalize email to lowercase for consistent session key
+        email = email.lower().strip()
+        
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'No account found with this email address'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if OTP was verified
+        verified = request.session.get(f'reset_verified_{email}')
+        verified_time = request.session.get(f'reset_verified_{email}_time')
+        
+        if not verified or not verified_time:
+            return Response(
+                {'error': 'Please verify OTP first'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if verification is still valid (10 minutes)
+        current_time = timezone.now().timestamp()
+        if current_time - verified_time > 600:  # 10 minutes
+            # Clear expired verification
+            del request.session[f'reset_verified_{email}']
+            del request.session[f'reset_verified_{email}_time']
+            return Response(
+                {'error': 'OTP verification expired. Please request a new OTP.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate password strength
+        if len(new_password) < 8:
+            return Response(
+                {'error': 'Password must be at least 8 characters long'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update password
+        user.set_password(new_password)
+        user.save()
+        
+        # Clear all reset-related session data
+        session_keys_to_clear = [
+            f'reset_otp_{email}',
+            f'reset_otp_{email}_time',
+            f'reset_verified_{email}',
+            f'reset_verified_{email}_time'
+        ]
+        
+        for key in session_keys_to_clear:
+            if key in request.session:
+                del request.session[key]
+        
+        return Response({
+            'success': True,
+            'message': 'Password reset successfully. You can now login with your new password.'
         }, status=status.HTTP_200_OK)

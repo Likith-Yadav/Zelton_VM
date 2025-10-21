@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import InputField from '../components/InputField';
+import PhoneInputField from '../components/PhoneInputField';
 import GradientButton from '../components/GradientButton';
 import { colors, typography, spacing, gradients, shadows } from '../theme/theme';
 import { validateEmail, validatePhone } from '../utils/helpers';
@@ -160,12 +161,11 @@ const TenantRegistrationScreen = ({ navigation }) => {
               leftIcon="mail"
             />
             
-            <InputField
+            <PhoneInputField
               label="Phone Number"
               placeholder="Enter your phone number"
               value={formData.phone}
               onChangeText={(value) => handleInputChange('phone', value)}
-              keyboardType="phone-pad"
               error={errors.phone}
               leftIcon="call"
             />
@@ -222,12 +222,11 @@ const TenantRegistrationScreen = ({ navigation }) => {
               leftIcon="person"
             />
             
-            <InputField
+            <PhoneInputField
               label="Emergency Contact Phone"
               placeholder="Enter emergency contact phone"
               value={formData.emergencyContact}
               onChangeText={(value) => handleInputChange('emergencyContact', value)}
-              keyboardType="phone-pad"
               error={errors.emergencyContact}
               leftIcon="call"
             />

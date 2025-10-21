@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { StatusBar } from "expo-status-bar";
 import { Provider as PaperProvider } from "react-native-paper";
 import Toast from "react-native-toast-message";
+import { Linking, Alert } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { paymentAPI } from "./src/services/api";
 
 // Import screens
 import LandingScreen from "./src/screens/LandingScreen";
@@ -27,6 +30,8 @@ import ContactMaintenanceScreen from "./src/screens/ContactMaintenanceScreen";
 import TenantDocumentsScreen from "./src/screens/TenantDocumentsScreen";
 import OwnerTenantDocumentsScreen from "./src/screens/OwnerTenantDocumentsScreen";
 import OTPVerificationScreen from "./src/screens/OTPVerificationScreen";
+import ForgotPasswordScreen from "./src/screens/ForgotPasswordScreen";
+import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 
 // Import theme
 import { theme } from "./src/theme/theme";
@@ -34,6 +39,102 @@ import { theme } from "./src/theme/theme";
 const Stack = createStackNavigator();
 
 export default function App() {
+  useEffect(() => {
+    // Handle deep links when app is already running
+    const handleDeepLink = (url) => {
+      console.log("Deep link received:", url);
+      if (url.includes("ZeltonLivings://payment/callback")) {
+        handlePaymentCallback(url);
+      }
+    };
+
+    // Handle deep links when app is opened from a closed state
+    const handleInitialURL = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl);
+      }
+    };
+
+    // Add event listener for deep links
+    const linkingListener = Linking.addEventListener("url", handleDeepLink);
+
+    // Check for initial URL
+    handleInitialURL();
+
+    return () => {
+      linkingListener?.remove();
+    };
+  }, []);
+
+  const handlePaymentCallback = async (url) => {
+    try {
+      console.log("Processing payment callback:", url);
+      
+      // Extract orderId and status from URL parameters
+      const urlObj = new URL(url);
+      const orderId = urlObj.searchParams.get("orderId");
+      const status = urlObj.searchParams.get("status");
+      
+      if (!orderId) {
+        console.error("No orderId found in callback URL");
+        return;
+      }
+
+      // Get stored payment data
+      const storedPaymentData = await AsyncStorage.getItem("current_payment_data");
+      const storedSubscriptionData = await AsyncStorage.getItem("current_subscription_payment");
+      
+      let paymentData = null;
+      if (storedPaymentData) {
+        paymentData = JSON.parse(storedPaymentData);
+      } else if (storedSubscriptionData) {
+        paymentData = JSON.parse(storedSubscriptionData);
+      }
+
+      if (!paymentData) {
+        console.error("No stored payment data found");
+        Alert.alert("Error", "Payment data not found. Please try again.");
+        return;
+      }
+
+      // Call backend to handle the callback
+      const response = await paymentAPI.handlePaymentCallback(orderId, status);
+      
+      if (response.data.success) {
+        // Clear stored payment data
+        await AsyncStorage.removeItem("current_payment_data");
+        await AsyncStorage.removeItem("current_subscription_payment");
+        
+        // Show success message
+        Alert.alert(
+          "Payment Successful!",
+          "Your payment has been processed successfully.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Navigate to appropriate dashboard based on payment type
+                // This will be handled by the navigation system
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Payment Failed",
+          response.data.message || "Payment could not be processed."
+        );
+      }
+    } catch (error) {
+      console.error("Error handling payment callback:", error);
+      Alert.alert(
+        "Error",
+        "Failed to process payment callback. Please check your payment status."
+      );
+    }
+  };
+
   return (
     <PaperProvider theme={theme}>
       <NavigationContainer>
@@ -64,6 +165,14 @@ export default function App() {
           <Stack.Screen
             name="OTPVerification"
             component={OTPVerificationScreen}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
           />
           <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
           <Stack.Screen

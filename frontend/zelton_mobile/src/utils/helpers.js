@@ -1,4 +1,4 @@
-import { VALIDATION_RULES } from "../constants/constants";
+import { VALIDATION_RULES, PHONE_VALIDATION } from "../constants/constants";
 
 // Validation helpers
 export const validateEmail = (email) => {
@@ -6,7 +6,24 @@ export const validateEmail = (email) => {
 };
 
 export const validatePhone = (phone) => {
-  return VALIDATION_RULES.PHONE.test(phone);
+  if (!phone) return false;
+  const cleaned = phone.replace(/\D/g, '');
+  return PHONE_VALIDATION.PATTERN.test(cleaned) && cleaned.length === PHONE_VALIDATION.MAX_LENGTH;
+};
+
+export const formatPhoneInput = (text) => {
+  // Remove all non-digit characters
+  const cleaned = text.replace(/\D/g, '');
+  
+  // Limit to 10 digits
+  const limited = cleaned.slice(0, PHONE_VALIDATION.MAX_LENGTH);
+  
+  return limited;
+};
+
+export const isValidPhoneInput = (text) => {
+  // Check if input contains only digits and is within length limit
+  return PHONE_VALIDATION.ALLOWED_CHARS.test(text) && text.length <= PHONE_VALIDATION.MAX_LENGTH;
 };
 
 export const validatePAN = (pan) => {

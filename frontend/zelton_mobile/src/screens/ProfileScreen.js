@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import GradientCard from "../components/GradientCard";
 import GradientButton from "../components/GradientButton";
+import PhoneInputField from "../components/PhoneInputField";
 import {
   colors,
   typography,
@@ -514,20 +515,34 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const renderEditField = (label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false) => (
-    <View style={styles.editField}>
-      <Text style={styles.editLabel}>{label}</Text>
-      <TextInput
-        style={[styles.editInput, multiline && styles.textArea]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
-      />
-    </View>
-  );
+  const renderEditField = (label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false) => {
+    // Special handling for phone fields
+    if (keyboardType === 'phone-pad' && label.toLowerCase().includes('phone')) {
+      return (
+        <PhoneInputField
+          label={label}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+        />
+      );
+    }
+    
+    return (
+      <View style={styles.editField}>
+        <Text style={styles.editLabel}>{label}</Text>
+        <TextInput
+          style={[styles.editInput, multiline && styles.textArea]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          multiline={multiline}
+          numberOfLines={multiline ? 3 : 1}
+        />
+      </View>
+    );
+  };
 
   const renderProfile = () => {
     if (!profileData) return null;

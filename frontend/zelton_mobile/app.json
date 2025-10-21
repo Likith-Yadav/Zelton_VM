@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Zelton",
-    "slug": "zelton_mobile",
+    "name": "ZeltonLivings",
+    "slug": "zeltonlivings_mobile",
     "version": "1.0.0",
     "description": "Property management app for owners and tenants",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": false,
-      "package": "com.zelton.mobile",
+      "package": "com.zeltonlivings.mobile",
       "config": {
         "compileSdkVersion": 34,
         "targetSdkVersion": 34,
@@ -31,14 +31,15 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "scheme": "zeltonlivings",
     "extra": {
       "eas": {
-        "projectId": "507c1faf-c3c1-4df3-b9a6-b3745740a13a"
+        "projectId": ""
       }
     },
     "plugins": [
       "expo-font"
     ],
-    "owner": ""
+    "owner": "testingz6"
   }
 }

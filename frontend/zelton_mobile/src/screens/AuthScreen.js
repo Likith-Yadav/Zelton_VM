@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import InputField from "../components/InputField";
+import PhoneInputField from "../components/PhoneInputField";
 import GradientButton from "../components/GradientButton";
 import {
   colors,
@@ -328,12 +329,11 @@ const AuthScreen = ({ navigation }) => {
             />
 
             {!isLogin && (
-              <InputField
+              <PhoneInputField
                 label="Mobile Number"
                 placeholder="Enter your mobile number"
                 value={formData.mobile}
                 onChangeText={(value) => handleInputChange("mobile", value)}
-                keyboardType="phone-pad"
                 error={errors.mobile}
                 leftIcon="call"
                 required
@@ -382,7 +382,10 @@ const AuthScreen = ({ navigation }) => {
             </TouchableOpacity>
 
             {isLogin && (
-              <TouchableOpacity style={styles.forgotPasswordButton}>
+              <TouchableOpacity 
+                style={styles.forgotPasswordButton}
+                onPress={() => navigation.navigate("ForgotPassword")}
+              >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
             )}

@@ -4,6 +4,8 @@ export const API_BASE_URL = "https://api.zelton.in";
 //export const API_BASE_URL = "http://192.168.0.102:8000/api";
 //yusha hotspot:
 // export const API_BASE_URL = "http://10.214.80.15:8000/api";
+//local development:
+//export const API_BASE_URL = "http://127.0.0.1:8000";
 export const USER_ROLES = {
   OWNER: "owner",
   TENANT: "tenant",
@@ -67,8 +69,8 @@ export const PHONEPE_CONFIG = {
   MERCHANT_USER_ID: "ZELTON_USER",
   SALT_KEY: "YOUR_SALT_KEY",
   SALT_INDEX: 1,
-  REDIRECT_URL: "https://zeltonlivings.com/payment/callback",
-  CALLBACK_URL: "https://zeltonlivings.com/payment/callback",
+  REDIRECT_URL: "ZeltonLivings://payment/callback",
+  CALLBACK_URL: "ZeltonLivings://payment/callback",
 };
 
 export const SCREEN_NAMES = {
@@ -95,6 +97,13 @@ export const VALIDATION_RULES = {
   PAN: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
   AADHAR: /^[0-9]{12}$/,
   PINCODE: /^[1-9][0-9]{5}$/,
+};
+
+export const PHONE_VALIDATION = {
+  MAX_LENGTH: 10,
+  MIN_LENGTH: 10,
+  PATTERN: /^[6-9]\d{9}$/,
+  ALLOWED_CHARS: /^[0-9]*$/,
 };
 
 export const ERROR_MESSAGES = {

@@ -43,7 +43,7 @@ const PropertyManagementScreen = ({ navigation }) => {
     property_type: "apartment",
     description: "",
   });
-  const [maintenanceContacts, setMaintenanceContacts] = useState({});
+  // Maintenance contacts are managed per unit, not at property level
 
   useEffect(() => {
     loadProperties();
@@ -115,7 +115,7 @@ const PropertyManagementScreen = ({ navigation }) => {
       description: "",
     };
     setFormData(newFormData);
-    setMaintenanceContacts({});
+    // Maintenance contacts not captured at property level
     setShowAddModal(true);
   };
 
@@ -130,91 +130,13 @@ const PropertyManagementScreen = ({ navigation }) => {
       property_type: property.property_type,
       description: property.description || "",
     });
-    setMaintenanceContacts(property.maintenance_contacts || {});
+    // Maintenance contacts not editable at property level
     setShowAddModal(true);
   };
 
-  const handleAddMaintenanceContact = () => {
-    Alert.prompt(
-      "Add Maintenance Contact",
-      "Enter service type (plumber, electrician, carpenter, ac_technician, housekeeping, security, other):",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Next",
-          onPress: (serviceType) => {
-            if (serviceType && serviceType.trim()) {
-              Alert.prompt(
-                "Contact Name",
-                "Enter contact name:",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Next",
-                    onPress: (name) => {
-                      if (name && name.trim()) {
-                        Alert.prompt(
-                          "Phone Number",
-                          "Enter phone number:",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Add",
-                              onPress: (phone) => {
-                                if (phone && phone.trim()) {
-                                  const newContacts = {
-                                    ...maintenanceContacts,
-                                    [serviceType.trim().toLowerCase()]: {
-                                      name: name.trim(),
-                                      phone: phone.trim(),
-                                      service_type: serviceType
-                                        .trim()
-                                        .toLowerCase(),
-                                    },
-                                  };
-                                  setMaintenanceContacts(newContacts);
-                                }
-                              },
-                            },
-                          ],
-                          "plain-text",
-                          ""
-                        );
-                      }
-                    },
-                  },
-                ],
-                "plain-text",
-                ""
-              );
-            }
-          },
-        },
-      ],
-      "plain-text",
-      "plumber"
-    );
-  };
+  // Property-level maintenance contact management removed
 
-  const handleDeleteMaintenanceContact = (serviceType) => {
-    const contact = maintenanceContacts[serviceType];
-    Alert.alert(
-      "Delete Contact",
-      `Are you sure you want to delete "${contact.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            const newContacts = { ...maintenanceContacts };
-            delete newContacts[serviceType];
-            setMaintenanceContacts(newContacts);
-          },
-        },
-      ]
-    );
-  };
+  // Property-level maintenance contact management removed
 
   const handleSaveProperty = async () => {
     try {
@@ -244,11 +166,8 @@ const PropertyManagementScreen = ({ navigation }) => {
         return;
       }
 
-      // Include maintenance contacts in the property data
-      const propertyData = {
-        ...formData,
-        maintenance_contacts: maintenanceContacts,
-      };
+      // Do not include maintenance contacts at property level
+      const propertyData = { ...formData };
 
       let response;
       if (editingProperty) {
@@ -656,75 +575,7 @@ const PropertyManagementScreen = ({ navigation }) => {
 
               {/* Emergency Contact removed */}
 
-              {/* Maintenance Contacts Section */}
-              <View style={styles.maintenanceSection}>
-                <Text style={styles.inputLabel}>
-                  Maintenance Contacts (Optional)
-                </Text>
-                <Text style={styles.maintenanceSubtitle}>
-                  Add maintenance contacts for this property. Tenants will be
-                  able to contact these services.
-                </Text>
-
-                {Object.keys(maintenanceContacts).length === 0 ? (
-                  <View style={styles.emptyMaintenanceContainer}>
-                    <Ionicons
-                      name="construct"
-                      size={24}
-                      color={colors.textLight}
-                    />
-                    <Text style={styles.emptyMaintenanceText}>
-                      No maintenance contacts added
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.maintenanceContactsList}>
-                    {Object.entries(maintenanceContacts).map(
-                      ([serviceType, contact]) => (
-                        <View
-                          key={serviceType}
-                          style={styles.maintenanceContactItem}
-                        >
-                          <View style={styles.maintenanceContactInfo}>
-                            <Text style={styles.maintenanceContactName}>
-                              {contact.name}
-                            </Text>
-                            <Text style={styles.maintenanceContactService}>
-                              {serviceType.charAt(0).toUpperCase() +
-                                serviceType.slice(1)}
-                            </Text>
-                            <Text style={styles.maintenanceContactPhone}>
-                              {contact.phone}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            style={styles.deleteMaintenanceButton}
-                            onPress={() =>
-                              handleDeleteMaintenanceContact(serviceType)
-                            }
-                          >
-                            <Ionicons
-                              name="trash"
-                              size={16}
-                              color={colors.error}
-                            />
-                          </TouchableOpacity>
-                        </View>
-                      )
-                    )}
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.addMaintenanceButton}
-                  onPress={handleAddMaintenanceContact}
-                >
-                  <Ionicons name="add" size={20} color={colors.primary} />
-                  <Text style={styles.addMaintenanceText}>
-                    Add Maintenance Contact
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {/* Maintenance contacts removed from property form. Manage per unit in Unit Management. */}
             </GradientCard>
           </ScrollView>
 

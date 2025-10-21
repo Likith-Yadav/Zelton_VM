@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import GradientButton from '../components/GradientButton';
 import GradientCard from '../components/GradientCard';
 import InputField from '../components/InputField';
+import PhoneInputField from '../components/PhoneInputField';
 import { colors, typography, spacing, gradients, shadows } from '../theme/theme';
 import { formatCurrency } from '../utils/helpers';
 import AuthService from '../services/authService';
@@ -190,12 +191,11 @@ const TenantSignupScreen = ({ navigation, route }) => {
             required
           />
 
-          <InputField
+          <PhoneInputField
             label="Phone"
             placeholder="Enter your phone number"
             value={formData.phone}
             onChangeText={(text) => handleInputChange('phone', text)}
-            keyboardType="phone-pad"
             leftIcon="call"
             required
           />

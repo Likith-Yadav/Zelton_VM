@@ -218,6 +218,11 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = False  # Allow cookies over HTTP for local development
 CSRF_COOKIE_SECURE = False  # Allow CSRF cookies over HTTP for local development
 
+# CSRF settings for API endpoints
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_AGE = None
+
 # Email configuration for production
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = config('EMAIL_HOST')

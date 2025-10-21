@@ -84,6 +84,10 @@ class AuthService {
       console.log("Attempting login with:", email);
 
       const response = await api.post("/api/auth/login/", { email, password });
+      
+      console.log("Login response:", response);
+      console.log("Response status:", response.status);
+      console.log("Response data:", response.data);
 
       if (response.data.success) {
         await this.storeUserData(response.data);
@@ -102,6 +106,10 @@ class AuthService {
       }
     } catch (error) {
       console.error("Login error details:", error);
+      console.error("Error response:", error.response);
+      console.error("Error status:", error.response?.status);
+      console.error("Error data:", error.response?.data);
+      
       const errorMessage =
         error.response?.data?.error ||
         "Login failed. Please check your credentials.";

@@ -76,7 +76,7 @@ const GradientButton = ({
     >
       <LinearGradient
         colors={
-          disabled ? [colors.textLight, colors.textLight] : getGradientColors()
+          disabled ? [colors.textSecondary, colors.textLight] : getGradientColors()
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
@@ -96,7 +96,7 @@ const GradientButton = ({
               <Ionicons
                 name={icon}
                 size={buttonSize.fontSize}
-                color={disabled ? colors.textSecondary : colors.white}
+                color={disabled ? colors.white : colors.white}
                 style={styles.icon}
               />
             )}
@@ -105,7 +105,7 @@ const GradientButton = ({
                 styles.text,
                 {
                   fontSize: buttonSize.fontSize,
-                  color: disabled ? colors.textSecondary : colors.white,
+                  color: disabled ? colors.white : colors.white,
                 },
                 textStyle,
               ]}

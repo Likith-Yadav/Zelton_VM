@@ -1,11 +1,29 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.utils import timezone
+import re
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice, 
     PaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
     OwnerSubscriptionPayment, TenantDocument
 )
+
+
+def validate_phone_number(value):
+    """Validate phone number format - exactly 10 digits starting with 6-9"""
+    if not value:
+        return value
+    
+    # Remove any non-digit characters
+    cleaned = re.sub(r'\D', '', str(value))
+    
+    # Check if it's exactly 10 digits and starts with 6-9
+    if not re.match(r'^[6-9]\d{9}$', cleaned):
+        raise serializers.ValidationError(
+            "Phone number must be exactly 10 digits and start with 6, 7, 8, or 9"
+        )
+    
+    return cleaned
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -18,6 +36,13 @@ class UserSerializer(serializers.ModelSerializer):
 class OwnerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     profile_image = serializers.SerializerMethodField()
+    phone = serializers.CharField(validators=[validate_phone_number])
+    subscription_plan_name = serializers.CharField(read_only=True)
+    max_units_allowed = serializers.IntegerField(read_only=True)
+    min_units_required = serializers.IntegerField(read_only=True)
+    is_within_plan_limits = serializers.BooleanField(read_only=True)
+    suggested_plan_upgrade = serializers.CharField(source='suggested_plan_upgrade.name', read_only=True)
+    can_add_unit = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Owner
@@ -25,9 +50,10 @@ class OwnerSerializer(serializers.ModelSerializer):
             'id', 'user', 'phone', 'address', 'city', 'state', 'pincode',
             'pan_number', 'aadhar_number', 'profile_image', 'date_of_birth', 'gender', 'occupation',
             'payment_method', 'bank_name', 
-            'ifsc_code', 'account_number', 'upi_id', 'subscription_plan', 'subscription_status',
-            'subscription_start_date', 'subscription_end_date', 'total_properties',
-            'created_at', 'updated_at'
+            'ifsc_code', 'account_number', 'upi_id', 'subscription_plan', 'subscription_plan_name', 
+            'subscription_status', 'subscription_start_date', 'subscription_end_date', 'total_properties',
+            'max_units_allowed', 'min_units_required', 'is_within_plan_limits', 
+            'suggested_plan_upgrade', 'can_add_unit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'total_properties']
     
@@ -35,7 +61,7 @@ class OwnerSerializer(serializers.ModelSerializer):
         if obj.profile_image:
             # Use the correct domain instead of request.build_absolute_uri()
             from django.conf import settings
-            base_url = settings.BASE_URL
+            base_url = getattr(settings, 'BASE_URL', 'https://api.zelton.in')
             return f"{base_url}{obj.profile_image.url}"
         return None
 
@@ -76,7 +102,6 @@ class UnitSerializer(serializers.ModelSerializer):
     pending_amount = serializers.SerializerMethodField()
     tenant_name = serializers.SerializerMethodField()
     tenant_key = serializers.SerializerMethodField()
-    tenant_key_expires = serializers.SerializerMethodField()
     tenant_key_status = serializers.SerializerMethodField()
     
     def get_rent_status(self, obj):
@@ -213,15 +238,6 @@ class UnitSerializer(serializers.ModelSerializer):
         
         return tenant_key.key
     
-    def get_tenant_key_expires(self, obj):
-        """Get tenant key expiration date"""
-        # Get the most recent tenant key (used or unused)
-        tenant_key = obj.tenant_keys.order_by('-created_at').first()
-        if not tenant_key:
-            return None
-        
-        return tenant_key.expires_at
-    
     def get_tenant_key_status(self, obj):
         """Get tenant key status"""
         # Get the most recent tenant key (used or unused)
@@ -231,8 +247,6 @@ class UnitSerializer(serializers.ModelSerializer):
         
         if tenant_key.is_used:
             return 'used'
-        elif tenant_key.expires_at < timezone.now():
-            return 'expired'
         else:
             return 'available'
     
@@ -243,7 +257,7 @@ class UnitSerializer(serializers.ModelSerializer):
             'security_deposit', 'maintenance_charge', 'rent_due_date', 'status',
             'area_sqft', 'description', 'remaining_amount', 'images', 'created_at', 'updated_at',
             'rent_status', 'rent_status_text', 'rent_status_color', 'current_month_paid',
-            'pending_amount', 'tenant_name', 'tenant_key', 'tenant_key_expires', 'tenant_key_status'
+            'pending_amount', 'tenant_name', 'tenant_key', 'tenant_key_status'
         ]
         read_only_fields = ['id', 'property', 'created_at', 'updated_at']
 
@@ -251,6 +265,7 @@ class UnitSerializer(serializers.ModelSerializer):
 class TenantSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     profile_image = serializers.SerializerMethodField()
+    phone = serializers.CharField(validators=[validate_phone_number], allow_blank=True)
     
     class Meta:
         model = Tenant
@@ -279,7 +294,7 @@ class TenantKeySerializer(serializers.ModelSerializer):
         model = TenantKey
         fields = [
             'id', 'key', 'property', 'property_name', 'unit', 'unit_number',
-            'tenant', 'tenant_name', 'is_used', 'used_at', 'expires_at', 'created_at'
+            'tenant', 'tenant_name', 'is_used', 'used_at', 'created_at'
         ]
         read_only_fields = ['id', 'key', 'created_at']
 
@@ -332,7 +347,7 @@ class PricingPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = PricingPlan
         fields = [
-            'id', 'name', 'min_properties', 'max_properties', 'monthly_price',
+            'id', 'name', 'min_units', 'max_units', 'monthly_price',
             'yearly_price', 'features', 'is_active', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
@@ -421,7 +436,7 @@ class TenantDocumentSerializer(serializers.ModelSerializer):
         if obj.document_file:
             # Use the correct domain instead of request.build_absolute_uri()
             from django.conf import settings
-            base_url = settings.BASE_URL
+            base_url = getattr(settings, 'BASE_URL', 'https://api.zelton.in')
             return f"{base_url}{obj.document_file.url}"
         return None
     

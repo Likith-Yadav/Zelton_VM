@@ -11,6 +11,7 @@ from phonepe.sdk.pg.env import Env
 from phonepe.sdk.pg.common.exceptions import PhonePeException
 
 from core.models import Payment, OwnerSubscriptionPayment, PaymentTransaction
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +22,18 @@ class PhonePeService:
     _client = None
     
     @classmethod
+    def reset_client(cls):
+        """Reset client instance (for debugging)"""
+        cls._client = None
+        logger.info("PhonePe client reset")
+    
+    @classmethod
     def get_client(cls):
         """Get PhonePe client instance (singleton)"""
         if cls._client is None:
             try:
                 env = Env.SANDBOX if settings.PHONEPE_ENVIRONMENT == 'SANDBOX' else Env.PRODUCTION
+                logger.info(f"Initializing PhonePe client with ID: {settings.PHONEPE_CLIENT_ID}, Environment: {settings.PHONEPE_ENVIRONMENT}")
                 cls._client = StandardCheckoutClient.get_instance(
                     client_id=settings.PHONEPE_CLIENT_ID,
                     client_secret=settings.PHONEPE_CLIENT_SECRET,
@@ -62,8 +70,8 @@ class PhonePeService:
             # Convert amount to paise
             amount_paise = int(float(amount) * 100)
             
-            # Create redirect URL
-            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/api/payments/handle-payment-callback/"
+            # Create redirect URL - using mobile app deep link with orderId parameter
+            redirect_url = f"ZeltonLivings://payment/callback?orderId={merchant_order_id}"
             
             # Create meta info
             meta_info = MetaInfo(
@@ -113,26 +121,42 @@ class PhonePeService:
     def initiate_owner_subscription_payment(cls, owner, pricing_plan, period):
         """Initiate subscription payment for owner"""
         try:
+            logger.info(f"Starting subscription payment for owner {owner.id}, plan {pricing_plan.name}, period {period}")
             client = cls.get_client()
             merchant_order_id = cls.generate_merchant_order_id("SUB")
+            logger.info(f"Generated merchant order ID: {merchant_order_id}")
             
             # Calculate amount based on period
             if period == 'yearly':
-                amount = pricing_plan.yearly_price
+                base_amount = pricing_plan.yearly_price
             else:
-                amount = pricing_plan.monthly_price
+                base_amount = pricing_plan.monthly_price
+            
+            # Apply 18% GST
+            try:
+                base_decimal = Decimal(str(base_amount))
+            except Exception:
+                base_decimal = Decimal(base_amount)
+            gst_amount = (base_decimal * Decimal('0.18')).quantize(Decimal('0.01'))
+            total_amount = (base_decimal + gst_amount).quantize(Decimal('0.01'))
             
             # Convert amount to paise
-            amount_paise = int(float(amount) * 100)
+            amount_paise = int(float(total_amount) * 100)
+            logger.info(f"Payment amount: Base={base_decimal}, GST={gst_amount}, Total={total_amount}, Amount in paise={amount_paise}")
             
-            # Create redirect URL
-            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/api/owner-subscriptions/payment-callback/"
+            # Create redirect URL - using mobile app deep link with orderId parameter
+            redirect_url = f"ZeltonLivings://payment/callback?orderId={merchant_order_id}"
+            logger.info(f"Redirect URL: {redirect_url}")
             
-            # Create meta info
+            # Create detailed breakdown in meta info
+            plan_name = pricing_plan.name or f"{pricing_plan.plan_type.title()} Plan"
+            
+            # Create meta info with payment breakdown
             meta_info = MetaInfo(
-                udf1=f"owner_{owner.id}",
-                udf2=f"plan_{pricing_plan.id}",
-                udf3=f"subscription_{period}"
+                udf1=f"Plan: {plan_name} ({period.title()})",
+                udf2=f"Base Amount: ₹{base_decimal}",
+                udf3=f"GST (18%): ₹{gst_amount}",
+                udf4=f"Total: ₹{total_amount}"
             )
             
             # Create payment request
@@ -143,10 +167,11 @@ class PhonePeService:
                 meta_info=meta_info
             )
             
+            logger.info(f"Making PhonePe payment request for order {merchant_order_id}")
             # Initiate payment
             response = client.pay(pay_request)
             
-            logger.info(f"Subscription payment initiated for owner {owner.id}, order {merchant_order_id}")
+            logger.info(f"Subscription payment initiated for owner {owner.id}, order {merchant_order_id}, PhonePe order ID: {response.order_id}")
             
             return {
                 'success': True,
@@ -294,6 +319,7 @@ class PhonePeService:
                 # Update owner subscription status
                 owner = subscription_payment.owner
                 owner.subscription_status = 'active'
+                owner.subscription_plan = subscription_payment.pricing_plan  # Update to new plan
                 owner.subscription_start_date = now
                 owner.subscription_end_date = subscription_payment.subscription_end_date
                 owner.save()

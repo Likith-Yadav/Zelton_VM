@@ -44,7 +44,7 @@ class Owner(models.Model):
     account_number = models.CharField(max_length=20, blank=True, default='')
     upi_id = models.CharField(max_length=100, blank=True, default='')
     
-    subscription_plan = models.CharField(max_length=50, default='basic')
+    subscription_plan = models.ForeignKey('PricingPlan', on_delete=models.SET_NULL, null=True, blank=True, related_name='subscribed_owners')
     subscription_status = models.CharField(max_length=20, default='inactive')
     subscription_start_date = models.DateTimeField(null=True, blank=True)
     subscription_end_date = models.DateTimeField(null=True, blank=True)
@@ -69,6 +69,75 @@ class Owner(models.Model):
     def calculated_occupied_units(self):
         """Calculate occupied units across all properties for this owner"""
         return Unit.objects.filter(property__owner=self, status='occupied').count()
+    
+    @property
+    def subscription_plan_name(self):
+        """Get the subscription plan name for backward compatibility"""
+        return self.subscription_plan.name if self.subscription_plan else 'No Plan'
+    
+    @property
+    def max_units_allowed(self):
+        """Get the maximum units allowed by the current subscription plan"""
+        return self.subscription_plan.max_units if self.subscription_plan else 0
+    
+    @property
+    def min_units_required(self):
+        """Get the minimum units required by the current subscription plan"""
+        return self.subscription_plan.min_units if self.subscription_plan else 0
+    
+    @property
+    def is_within_plan_limits(self):
+        """Check if owner is within their subscription plan limits"""
+        if not self.subscription_plan:
+            return False
+        return self.calculated_total_units <= self.max_units_allowed
+    
+    @property
+    def suggested_plan_upgrade(self):
+        """Suggest the appropriate plan upgrade based on current unit count"""
+        if not self.subscription_plan:
+            return None
+        
+        current_count = self.calculated_total_units
+        if current_count <= self.max_units_allowed:
+            return None  # No upgrade needed
+        
+        # Find the appropriate plan for current unit count
+        suggested_plan = PricingPlan.objects.filter(
+            min_units__lte=current_count,
+            max_units__gte=current_count,
+            is_active=True
+        ).first()
+        
+        return suggested_plan
+    
+    @property
+    def can_add_unit(self):
+        """Check if owner can add another unit based on their plan"""
+        if not self.subscription_plan:
+            return False  # No plan means no units allowed
+        return self.calculated_total_units < self.max_units_allowed
+    
+    def validate_unit_limit(self):
+        """Validate if owner can add more units - used for security checks"""
+        if not self.subscription_plan:
+            raise ValueError("No subscription plan found. Please subscribe to a plan first.")
+        
+        if not self.can_add_unit:
+            suggested_plan = self.suggested_plan_upgrade
+            if suggested_plan:
+                raise ValueError(
+                    f"Unit limit exceeded. Current: {self.calculated_total_units}, "
+                    f"Max allowed: {self.max_units_allowed}. "
+                    f"Upgrade to {suggested_plan.name} to add up to {suggested_plan.max_units} units."
+                )
+            else:
+                raise ValueError(
+                    f"Unit limit exceeded. Current: {self.calculated_total_units}, "
+                    f"Max allowed: {self.max_units_allowed}. "
+                    f"Please contact support for a custom plan."
+                )
+        return True
 
 
 class Property(models.Model):
@@ -205,14 +274,11 @@ class TenantKey(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='tenant_keys', null=True, blank=True)
     is_used = models.BooleanField(default=False)
     used_at = models.DateTimeField(null=True, blank=True)
-    expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
         if not self.key:
             self.key = self.generate_unique_key()
-        if not self.expires_at:
-            self.expires_at = timezone.now() + timezone.timedelta(days=30)
         super().save(*args, **kwargs)
     
     def generate_unique_key(self):
@@ -343,8 +409,8 @@ class PaymentProof(models.Model):
 
 class PricingPlan(models.Model):
     name = models.CharField(max_length=100)
-    min_properties = models.IntegerField()
-    max_properties = models.IntegerField()
+    min_units = models.IntegerField()
+    max_units = models.IntegerField()
     monthly_price = models.DecimalField(max_digits=10, decimal_places=2)
     yearly_price = models.DecimalField(max_digits=10, decimal_places=2)
     features = models.JSONField(default=list)
@@ -352,13 +418,13 @@ class PricingPlan(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"{self.name} - {self.min_properties}-{self.max_properties} properties"
+        return f"{self.name} - {self.min_units}-{self.max_units} units"
     
     @classmethod
-    def get_plan_for_property_count(cls, property_count):
+    def get_plan_for_unit_count(cls, unit_count):
         return cls.objects.filter(
-            min_properties__lte=property_count,
-            max_properties__gte=property_count,
+            min_units__lte=unit_count,
+            max_units__gte=unit_count,
             is_active=True
         ).first()
 
@@ -514,18 +580,18 @@ def validate_document_file(file):
 def tenant_document_upload_path(instance, filename):
     """Generate upload path for tenant documents"""
     import os
+    import uuid
+    
     file_extension = os.path.splitext(filename)[1]
-    return f'tenant_documents/{instance.tenant.id}/{instance.document_type}_{instance.id}{file_extension}'
+    # Use a UUID if instance.id is not available yet
+    unique_id = str(instance.id) if instance.id else str(uuid.uuid4())[:8]
+    return f'tenant_documents/{instance.tenant.id}/{instance.document_type}_{unique_id}{file_extension}'
 
 
 class TenantDocument(models.Model):
     DOCUMENT_TYPE_CHOICES = [
         ('aadhaar', 'Aadhaar Card'),
         ('rental_agreement', 'Rental Agreement'),
-        ('pan_card', 'PAN Card'),
-        ('police_verification', 'Police Verification'),
-        ('passport', 'Passport'),
-        ('other', 'Other'),
     ]
     
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='documents')

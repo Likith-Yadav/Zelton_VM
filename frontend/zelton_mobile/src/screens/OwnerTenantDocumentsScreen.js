@@ -26,10 +26,6 @@ import DataService from "../services/dataService";
 const DOCUMENT_TYPE_LABELS = {
   aadhaar: "Aadhaar Card",
   rental_agreement: "Rental Agreement",
-  pan_card: "PAN Card",
-  police_verification: "Police Verification",
-  passport: "Passport",
-  other: "Other",
 };
 
 const OwnerTenantDocumentsScreen = ({ navigation, route }) => {
@@ -78,10 +74,10 @@ const OwnerTenantDocumentsScreen = ({ navigation, route }) => {
       );
       console.log("Download response:", response);
 
-      if (response.success) {
+      if (response.success && response.data.success) {
         // Handle response structure - backend returns flat structure
-        const downloadUrl = response.data?.download_url;
-        const fileName = response.data?.file_name;
+        const downloadUrl = response.data.download_url;
+        const fileName = response.data.file_name;
 
         console.log("Download URL:", downloadUrl);
         console.log("File name:", fileName);
@@ -179,12 +175,6 @@ const OwnerTenantDocumentsScreen = ({ navigation, route }) => {
         return "card";
       case "rental_agreement":
         return "document-text";
-      case "pan_card":
-        return "card-outline";
-      case "police_verification":
-        return "shield-checkmark";
-      case "passport":
-        return "airplane";
       default:
         return "document";
     }

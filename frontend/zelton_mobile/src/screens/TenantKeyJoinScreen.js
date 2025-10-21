@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +34,7 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
   const [success, setSuccess] = useState(false);
   const [propertyInfo, setPropertyInfo] = useState(null);
   const [inputError, setInputError] = useState("");
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scaleAnim = new Animated.Value(1);
 
   // Get registration data from previous screens (OTP verification)
@@ -45,6 +49,15 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
       tenantKey ? tenantKey.length : "null/undefined"
     );
   }, [tenantKey]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleKeyChange = (value) => {
     console.log("=== handleKeyChange called ===");
@@ -363,7 +376,11 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <View style={styles.content}>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -399,7 +416,7 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
         </GradientCard>
 
         {/* Key Input */}
-        <View style={styles.keyInputContainer}>
+        <View style={[styles.keyInputContainer, keyboardVisible ? { marginBottom: spacing.xxl } : null]}>
           <InputField
             label="Tenant Key"
             placeholder="Enter 8-character tenant key"
@@ -451,7 +468,7 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
             <Text style={styles.contactButtonText}>Contact Support</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 };

@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import GradientButton from "../components/GradientButton";
 import GradientCard from "../components/GradientCard";
+import PhoneInputField from "../components/PhoneInputField";
 import {
   colors,
   typography,
@@ -25,6 +26,7 @@ import {
 } from "../theme/theme";
 import { formatCurrency, formatDate, formatOrdinal } from "../utils/helpers";
 import DataService from "../services/dataService";
+import { ownerSubscriptionAPI } from "../services/api";
 import { UNIT_TYPES, UNIT_STATUS } from "../constants/constants";
 
 const SERVICE_TYPES = [
@@ -56,6 +58,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
     area_sqft: "",
     description: "",
   });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeDetails, setUpgradeDetails] = useState(null);
+  const [limitWarning, setLimitWarning] = useState(null);
   const [maintenanceContacts, setMaintenanceContacts] = useState({});
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [maintenanceFormData, setMaintenanceFormData] = useState({
@@ -69,6 +74,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
     if (property) {
       loadUnits();
       loadMaintenanceContacts();
+      checkSubscriptionLimits();
     } else {
       // Load all properties and show property selector
       loadAllProperties();
@@ -163,6 +169,34 @@ const UnitManagementScreen = ({ navigation, route }) => {
     setShowAddModal(true);
   };
 
+  const showUpgradePrompt = (errorResponse) => {
+    setUpgradeDetails(errorResponse);
+    setShowUpgradeModal(true);
+  };
+
+  const handleNavigateToUpgrade = () => {
+    setShowUpgradeModal(false);
+    // Navigate to pricing/subscription screen with upgrade context
+    navigation.navigate('Pricing', {
+      isUpgrade: true,
+      currentPlan: upgradeDetails.subscription_plan,
+      suggestedPlan: upgradeDetails.suggested_plan
+    });
+  };
+
+  const checkSubscriptionLimits = async () => {
+    try {
+      const response = await ownerSubscriptionAPI.checkLimits();
+      if (response.data && !response.data.can_add_unit) {
+        setLimitWarning(response.data);
+      } else {
+        setLimitWarning(null);
+      }
+    } catch (error) {
+      console.error("Error checking limits:", error);
+    }
+  };
+
   const handleEditUnit = (unit) => {
     setEditingUnit(unit);
     setFormData({
@@ -243,7 +277,14 @@ const UnitManagementScreen = ({ navigation, route }) => {
           editingUnit ? "Unit updated successfully" : "Unit added successfully"
         );
       } else {
-        Alert.alert("Error", response.error || "Failed to save unit");
+        // Check if error is due to unit limit
+        if (response.error === 'Unit limit exceeded' || response.upgrade_required) {
+          setShowAddModal(false);
+          // Show upgrade prompt with plan details
+          showUpgradePrompt(response);
+        } else {
+          Alert.alert("Error", response.error || "Failed to save unit");
+        }
       }
     } catch (err) {
       console.error("Save unit error:", err);
@@ -303,9 +344,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
 
         Alert.alert(
           "Tenant Key Generated",
-          `Key: ${response.data.key}\n\nThis key will expire on ${formatDate(
-            response.data.expires_at
-          )}`,
+          `Key: ${response.data.key}\n\nThis key can be used by tenants to access the unit.`,
           [
             { text: "OK" },
             {
@@ -669,11 +708,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
                 </View>
               </View>
             )}
-            {unit.tenant_key_expires && (
-              <Text style={styles.tenantKeyExpiry}>
-                Expires: {formatDate(unit.tenant_key_expires)}
-              </Text>
-            )}
           </View>
         )}
 
@@ -835,6 +869,22 @@ const UnitManagementScreen = ({ navigation, route }) => {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Warning Banner */}
+        {limitWarning && (
+          <GradientCard style={styles.warningBanner}>
+            <Ionicons name="warning" size={24} color={colors.warning} />
+            <View style={styles.warningContent}>
+              <Text style={styles.warningTitle}>Subscription Limit Reached</Text>
+              <Text style={styles.warningText}>
+                You've used {limitWarning.current_units} of {limitWarning.max_units_allowed} units
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Pricing', { isUpgrade: true })}>
+              <Text style={styles.upgradeLink}>Upgrade</Text>
+            </TouchableOpacity>
+          </GradientCard>
+        )}
+
         {/* Error Message */}
         {error && (
           <GradientCard variant="surface" style={styles.errorCard}>
@@ -1218,9 +1268,8 @@ const UnitManagementScreen = ({ navigation, route }) => {
                 placeholderTextColor={colors.textLight}
               />
 
-              <Text style={styles.inputLabel}>Phone Number</Text>
-              <TextInput
-                style={styles.textInput}
+              <PhoneInputField
+                label="Phone Number"
                 value={maintenanceFormData.phone}
                 onChangeText={(text) =>
                   setMaintenanceFormData({
@@ -1229,8 +1278,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
                   })
                 }
                 placeholder="Enter phone number"
-                placeholderTextColor={colors.textLight}
-                keyboardType="phone-pad"
               />
             </GradientCard>
           </ScrollView>
@@ -1300,6 +1347,75 @@ const UnitManagementScreen = ({ navigation, route }) => {
           </ScrollView>
         </LinearGradient>
       </Modal>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && upgradeDetails && (
+        <Modal
+          visible={showUpgradeModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowUpgradeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <GradientCard style={styles.upgradeModalContent}>
+              <View style={styles.upgradeHeader}>
+                <Ionicons name="alert-circle" size={48} color={colors.warning} />
+                <Text style={styles.upgradeTitle}>Subscription Limit Reached</Text>
+              </View>
+              
+              <Text style={styles.upgradeMessage}>
+                {upgradeDetails.message}
+              </Text>
+              
+              <View style={styles.limitInfo}>
+                <Text style={styles.limitText}>
+                  Current Units: {upgradeDetails.current_units} / {upgradeDetails.max_units_allowed}
+                </Text>
+                <Text style={styles.limitText}>
+                  Current Plan: {upgradeDetails.subscription_plan}
+                </Text>
+              </View>
+              
+              {upgradeDetails.suggested_plan && (
+                <View style={styles.suggestedPlanCard}>
+                  <Text style={styles.suggestedPlanTitle}>Recommended Upgrade</Text>
+                  <Text style={styles.planName}>{upgradeDetails.suggested_plan.name}</Text>
+                  <Text style={styles.planUnits}>
+                    Up to {upgradeDetails.suggested_plan.max_units} units
+                  </Text>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.priceLabel}>Monthly:</Text>
+                    <Text style={styles.priceValue}>
+                      ₹{upgradeDetails.suggested_plan.monthly_price}
+                    </Text>
+                  </View>
+                  <View style={styles.pricingRow}>
+                    <Text style={styles.priceLabel}>Yearly:</Text>
+                    <Text style={styles.priceValue}>
+                      ₹{upgradeDetails.suggested_plan.yearly_price}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              
+              <View style={styles.upgradeActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowUpgradeModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <GradientButton
+                  title="Upgrade Now"
+                  onPress={handleNavigateToUpgrade}
+                  style={styles.upgradeButton}
+                />
+              </View>
+            </GradientCard>
+          </View>
+        </Modal>
+      )}
     </LinearGradient>
   );
 };
@@ -1510,13 +1626,6 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
     borderRadius: 4,
     backgroundColor: colors.primary + "20",
-  },
-  tenantKeyExpiry: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginLeft: spacing.sm,
-    marginTop: spacing.xs,
-    width: "100%",
   },
   tenantKeyStatusContainer: {
     marginTop: spacing.xs,
@@ -1902,6 +2011,136 @@ const styles = StyleSheet.create({
   propertyUnits: {
     ...typography.caption,
     color: colors.textLight,
+  },
+  // Upgrade Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  upgradeModalContent: {
+    margin: spacing.lg,
+    padding: spacing.xl,
+    maxHeight: '80%',
+    width: '90%',
+  },
+  upgradeHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  upgradeTitle: {
+    ...typography.h4,
+    color: colors.text,
+    fontWeight: 'bold',
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  upgradeMessage: {
+    ...typography.body1,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  limitInfo: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.lg,
+  },
+  limitText: {
+    ...typography.body2,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  suggestedPlanCard: {
+    backgroundColor: colors.primary + '20',
+    padding: spacing.lg,
+    borderRadius: 12,
+    marginBottom: spacing.lg,
+  },
+  suggestedPlanTitle: {
+    ...typography.h6,
+    color: colors.primary,
+    fontWeight: 'bold',
+    marginBottom: spacing.sm,
+  },
+  planName: {
+    ...typography.h5,
+    color: colors.text,
+    fontWeight: 'bold',
+    marginBottom: spacing.xs,
+  },
+  planUnits: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  priceLabel: {
+    ...typography.body2,
+    color: colors.textSecondary,
+  },
+  priceValue: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: 'bold',
+  },
+  upgradeActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    marginRight: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    ...typography.body1,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  upgradeButton: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  // Warning Banner Styles
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.warning + '20',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
+  },
+  warningContent: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  warningTitle: {
+    ...typography.body1,
+    color: colors.warning,
+    fontWeight: 'bold',
+    marginBottom: spacing.xs,
+  },
+  warningText: {
+    ...typography.body2,
+    color: colors.textSecondary,
+  },
+  upgradeLink: {
+    ...typography.body2,
+    color: colors.primary,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });
 

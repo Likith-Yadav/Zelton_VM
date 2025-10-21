@@ -167,12 +167,6 @@ const TenantDashboardScreen = ({ navigation }) => {
         return "card";
       case "rental_agreement":
         return "document-text";
-      case "pan_card":
-        return "card";
-      case "police_verification":
-        return "shield-checkmark";
-      case "passport":
-        return "airplane";
       default:
         return "document";
     }
@@ -185,12 +179,6 @@ const TenantDashboardScreen = ({ navigation }) => {
         return "Aadhaar Card";
       case "rental_agreement":
         return "Rental Agreement";
-      case "pan_card":
-        return "PAN Card";
-      case "police_verification":
-        return "Police Verification";
-      case "passport":
-        return "Passport";
       default:
         return "Document";
     }
@@ -550,12 +538,6 @@ const TenantDashboardScreen = ({ navigation }) => {
                             ? "Aadhaar"
                             : document.document_type === "rental_agreement"
                             ? "Rental"
-                            : document.document_type === "pan_card"
-                            ? "PAN"
-                            : document.document_type === "police_verification"
-                            ? "Police"
-                            : document.document_type === "passport"
-                            ? "Passport"
                             : "Doc"}
                         </Text>
                       </View>

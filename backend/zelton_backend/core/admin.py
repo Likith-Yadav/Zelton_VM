@@ -8,10 +8,10 @@ from .models import (
 
 @admin.register(Owner)
 class OwnerAdmin(admin.ModelAdmin):
-    list_display = ['user', 'phone', 'city', 'subscription_plan', 'subscription_status', 'get_total_properties', 'get_total_units', 'get_occupied_units']
+    list_display = ['user', 'phone', 'city', 'get_subscription_plan_name', 'subscription_status', 'get_max_units_allowed', 'get_total_units', 'get_is_within_limits', 'get_can_add_unit']
     list_filter = ['subscription_plan', 'subscription_status', 'city']
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'phone']
-    readonly_fields = ['get_total_properties', 'get_total_units', 'get_occupied_units']
+    readonly_fields = ['get_total_properties', 'get_total_units', 'get_occupied_units', 'get_subscription_plan_name', 'get_max_units_allowed', 'get_is_within_limits', 'get_can_add_unit', 'get_suggested_upgrade']
     
     def get_total_properties(self, obj):
         """Display calculated total properties"""
@@ -28,6 +28,36 @@ class OwnerAdmin(admin.ModelAdmin):
         """Display calculated occupied units"""
         return obj.calculated_occupied_units
     get_occupied_units.short_description = 'Occupied Units'
+    
+    def get_subscription_plan_name(self, obj):
+        """Display subscription plan name"""
+        return obj.subscription_plan_name
+    get_subscription_plan_name.short_description = 'Subscription Plan'
+    get_subscription_plan_name.admin_order_field = 'subscription_plan__name'
+    
+    def get_max_units_allowed(self, obj):
+        """Display maximum units allowed by subscription plan"""
+        return obj.max_units_allowed
+    get_max_units_allowed.short_description = 'Max Units Allowed'
+    get_max_units_allowed.admin_order_field = 'subscription_plan__max_units'
+    
+    def get_is_within_limits(self, obj):
+        """Display if owner is within plan limits"""
+        return obj.is_within_plan_limits
+    get_is_within_limits.short_description = 'Within Limits'
+    get_is_within_limits.boolean = True
+    
+    def get_can_add_unit(self, obj):
+        """Display if owner can add more units"""
+        return obj.can_add_unit
+    get_can_add_unit.short_description = 'Can Add Unit'
+    get_can_add_unit.boolean = True
+    
+    def get_suggested_upgrade(self, obj):
+        """Display suggested plan upgrade"""
+        suggested = obj.suggested_plan_upgrade
+        return suggested.name if suggested else 'No upgrade needed'
+    get_suggested_upgrade.short_description = 'Suggested Upgrade'
 
 
 @admin.register(Property)
@@ -73,7 +103,7 @@ class TenantAdmin(admin.ModelAdmin):
 
 @admin.register(TenantKey)
 class TenantKeyAdmin(admin.ModelAdmin):
-    list_display = ['key', 'property', 'unit', 'tenant', 'is_used', 'expires_at']
+    list_display = ['key', 'property', 'unit', 'tenant', 'is_used']
     list_filter = ['is_used', 'property__city']
     search_fields = ['key', 'property__name', 'unit__unit_number']
 
@@ -94,7 +124,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 @admin.register(PricingPlan)
 class PricingPlanAdmin(admin.ModelAdmin):
-    list_display = ['name', 'min_properties', 'max_properties', 'monthly_price', 'yearly_price', 'is_active']
+    list_display = ['name', 'min_units', 'max_units', 'monthly_price', 'yearly_price', 'is_active']
     list_filter = ['is_active']
 
 
