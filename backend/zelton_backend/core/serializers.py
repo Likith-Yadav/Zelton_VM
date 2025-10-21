@@ -5,7 +5,7 @@ import re
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice, 
     PaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    OwnerSubscriptionPayment, TenantDocument
+    OwnerSubscriptionPayment, TenantDocument, OwnerPayment
 )
 
 
@@ -254,10 +254,10 @@ class UnitSerializer(serializers.ModelSerializer):
         model = Unit
         fields = [
             'id', 'property', 'property_name', 'unit_number', 'unit_type', 'rent_amount',
-            'security_deposit', 'maintenance_charge', 'rent_due_date', 'status',
-            'area_sqft', 'description', 'remaining_amount', 'images', 'created_at', 'updated_at',
-            'rent_status', 'rent_status_text', 'rent_status_color', 'current_month_paid',
-            'pending_amount', 'tenant_name', 'tenant_key', 'tenant_key_status'
+            'rent_due_date', 'status', 'area_sqft', 'description', 'remaining_amount', 
+            'images', 'created_at', 'updated_at', 'rent_status', 'rent_status_text', 
+            'rent_status_color', 'current_month_paid', 'pending_amount', 'tenant_name', 
+            'tenant_key', 'tenant_key_status'
         ]
         read_only_fields = ['id', 'property', 'created_at', 'updated_at']
 
@@ -376,6 +376,25 @@ class OwnerSubscriptionPaymentSerializer(serializers.ModelSerializer):
             'subscription_period', 'subscription_start_date', 'subscription_end_date',
             'merchant_order_id', 'phonepe_order_id', 'phonepe_transaction_id',
             'payment_gateway_response', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class OwnerPaymentSerializer(serializers.ModelSerializer):
+    owner_name = serializers.CharField(source='owner.user.get_full_name', read_only=True)
+    owner_email = serializers.CharField(source='owner.user.email', read_only=True)
+    pricing_plan_name = serializers.CharField(source='pricing_plan.name', read_only=True)
+    
+    class Meta:
+        model = OwnerPayment
+        fields = [
+            'id', 'owner', 'owner_name', 'owner_email', 'pricing_plan', 'pricing_plan_name',
+            'amount', 'payment_type', 'payment_method', 'status', 'payment_date',
+            'due_date', 'subscription_start_date', 'subscription_end_date',
+            'merchant_order_id', 'phonepe_order_id', 'phonepe_transaction_id',
+            'payment_gateway_response', 'is_legacy_payment', 'legacy_notes',
+            'migrated_from', 'description', 'invoice_number', 'receipt_number',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

@@ -118,6 +118,60 @@ class Owner(models.Model):
             return False  # No plan means no units allowed
         return self.calculated_total_units < self.max_units_allowed
     
+    @property
+    def is_subscription_active(self):
+        """Check if subscription is currently active and not expired"""
+        if not self.subscription_plan or self.subscription_status != 'active':
+            return False
+        
+        if not self.subscription_end_date:
+            return False
+        
+        from django.utils import timezone
+        return timezone.now().date() <= self.subscription_end_date
+    
+    @property
+    def is_subscription_expired(self):
+        """Check if subscription has expired"""
+        if not self.subscription_plan or not self.subscription_end_date:
+            return False
+        
+        from django.utils import timezone
+        return timezone.now().date() > self.subscription_end_date
+    
+    @property
+    def days_until_expiry(self):
+        """Get number of days until subscription expires"""
+        if not self.subscription_end_date:
+            return None
+        
+        from django.utils import timezone
+        today = timezone.now().date()
+        delta = self.subscription_end_date - today
+        return delta.days
+    
+    @property
+    def subscription_expiry_status(self):
+        """Get subscription expiry status"""
+        if not self.subscription_plan:
+            return 'no_plan'
+        
+        if self.is_subscription_expired:
+            return 'expired'
+        
+        days_left = self.days_until_expiry
+        if days_left is None:
+            return 'unknown'
+        
+        if days_left <= 0:
+            return 'expired'
+        elif days_left <= 7:
+            return 'expiring_soon'
+        elif days_left <= 30:
+            return 'expiring_month'
+        else:
+            return 'active'
+    
     def validate_unit_limit(self):
         """Validate if owner can add more units - used for security checks"""
         if not self.subscription_plan:
@@ -179,8 +233,6 @@ class Unit(models.Model):
     unit_number = models.CharField(max_length=50)
     unit_type = models.CharField(max_length=50)  # 1BHK, 2BHK, etc.
     rent_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    security_deposit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    maintenance_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     rent_due_date = models.IntegerField(default=1)  # Day of month
     status = models.CharField(max_length=20, choices=UNIT_STATUS, default='available')
     area_sqft = models.IntegerField(null=True, blank=True)
@@ -522,6 +574,205 @@ class OwnerSubscriptionPayment(models.Model):
         if not self.merchant_order_id:
             self.merchant_order_id = f"SUB_{self.owner.id}_{int(timezone.now().timestamp())}"
         super().save(*args, **kwargs)
+
+
+class OwnerPayment(models.Model):
+    """
+    Comprehensive payment tracking model for all owner payments.
+    This model handles both new and legacy payments gracefully.
+    """
+    PAYMENT_STATUS = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+        ('refunded', 'Refunded'),
+    ]
+    
+    PAYMENT_TYPE = [
+        ('subscription', 'Subscription Payment'),
+        ('upgrade', 'Plan Upgrade'),
+        ('renewal', 'Plan Renewal'),
+        ('legacy', 'Legacy Payment'),  # For old payments without proper tracking
+    ]
+    
+    PAYMENT_METHOD = [
+        ('phonepe', 'PhonePe'),
+        ('razorpay', 'Razorpay'),
+        ('manual', 'Manual Entry'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('cash', 'Cash'),
+        ('other', 'Other'),
+    ]
+    
+    # Core payment information
+    owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='all_payments')
+    pricing_plan = models.ForeignKey(PricingPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name='owner_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE, default='subscription')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD, default='phonepe')
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='pending')
+    
+    # Payment dates
+    payment_date = models.DateTimeField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    subscription_start_date = models.DateTimeField(null=True, blank=True)
+    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    
+    # Payment gateway information
+    merchant_order_id = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    phonepe_order_id = models.CharField(max_length=100, blank=True)
+    phonepe_transaction_id = models.CharField(max_length=100, blank=True)
+    payment_gateway_response = models.JSONField(default=dict)
+    
+    # Legacy payment handling
+    is_legacy_payment = models.BooleanField(default=False)
+    legacy_notes = models.TextField(blank=True, help_text="Notes for legacy payments")
+    migrated_from = models.CharField(max_length=100, blank=True, help_text="Source of migration if applicable")
+    
+    # Additional information
+    description = models.TextField(blank=True)
+    invoice_number = models.CharField(max_length=100, blank=True)
+    receipt_number = models.CharField(max_length=100, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'status']),
+            models.Index(fields=['payment_date']),
+            models.Index(fields=['merchant_order_id']),
+        ]
+    
+    def __str__(self):
+        return f"Payment {self.id} - {self.owner.user.email} - ₹{self.amount} ({self.status})"
+    
+    def save(self, *args, **kwargs):
+        if not self.merchant_order_id and not self.is_legacy_payment:
+            self.merchant_order_id = f"OWNER_{self.owner.id}_{int(timezone.now().timestamp())}"
+        super().save(*args, **kwargs)
+    
+    @property
+    def owner_name(self):
+        """Get owner's full name"""
+        return self.owner.user.get_full_name() or self.owner.user.username
+    
+    @property
+    def owner_email(self):
+        """Get owner's email"""
+        return self.owner.user.email
+    
+    @property
+    def pricing_plan_name(self):
+        """Get pricing plan name"""
+        return self.pricing_plan.name if self.pricing_plan else 'No Plan'
+    
+    @property
+    def subscription_duration_days(self):
+        """Get subscription duration in days"""
+        if self.subscription_start_date and self.subscription_end_date:
+            duration = self.subscription_end_date - self.subscription_start_date
+            return duration.days
+        return 0
+    
+    @property
+    def is_active_subscription(self):
+        """Check if this payment represents an active subscription"""
+        if not self.subscription_end_date:
+            return False
+        from django.utils import timezone
+        return timezone.now() <= self.subscription_end_date
+    
+    @classmethod
+    def create_legacy_payment(cls, owner, amount, payment_date=None, description="Legacy payment", **kwargs):
+        """
+        Create a legacy payment record for old payments that don't have proper tracking.
+        This method handles old payments gracefully without errors.
+        """
+        try:
+            # Set default values for legacy payments
+            legacy_data = {
+                'owner': owner,
+                'amount': amount,
+                'payment_type': 'legacy',
+                'payment_method': 'manual',
+                'status': 'completed',
+                'is_legacy_payment': True,
+                'legacy_notes': description,
+                'migrated_from': 'legacy_system',
+                'description': description,
+            }
+            
+            if payment_date:
+                legacy_data['payment_date'] = payment_date
+            
+            # Update with any additional kwargs
+            legacy_data.update(kwargs)
+            
+            return cls.objects.create(**legacy_data)
+        except Exception as e:
+            # Log the error but don't raise it to prevent system crashes
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create legacy payment for owner {owner.id}: {str(e)}")
+            return None
+    
+    @classmethod
+    def migrate_old_subscription_payments(cls):
+        """
+        Migrate old OwnerSubscriptionPayment records to the new OwnerPayment model.
+        This method handles the migration gracefully.
+        """
+        try:
+            from .models import OwnerSubscriptionPayment
+            
+            migrated_count = 0
+            for old_payment in OwnerSubscriptionPayment.objects.all():
+                try:
+                    # Check if already migrated
+                    if cls.objects.filter(
+                        owner=old_payment.owner,
+                        amount=old_payment.amount,
+                        payment_date=old_payment.payment_date,
+                        migrated_from='OwnerSubscriptionPayment'
+                    ).exists():
+                        continue
+                    
+                    # Create new payment record
+                    cls.objects.create(
+                        owner=old_payment.owner,
+                        pricing_plan=old_payment.pricing_plan,
+                        amount=old_payment.amount,
+                        payment_type='subscription',
+                        payment_method='phonepe',
+                        status=old_payment.status,
+                        payment_date=old_payment.payment_date,
+                        due_date=old_payment.due_date,
+                        subscription_start_date=old_payment.subscription_start_date,
+                        subscription_end_date=old_payment.subscription_end_date,
+                        merchant_order_id=old_payment.merchant_order_id,
+                        phonepe_order_id=old_payment.phonepe_order_id,
+                        phonepe_transaction_id=old_payment.phonepe_transaction_id,
+                        payment_gateway_response=old_payment.payment_gateway_response,
+                        migrated_from='OwnerSubscriptionPayment',
+                        description=f"Migrated from OwnerSubscriptionPayment ID: {old_payment.id}"
+                    )
+                    migrated_count += 1
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to migrate payment {old_payment.id}: {str(e)}")
+                    continue
+            
+            return migrated_count
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to migrate old subscription payments: {str(e)}")
+            return 0
 
 
 # Signal handlers to update property unit counts

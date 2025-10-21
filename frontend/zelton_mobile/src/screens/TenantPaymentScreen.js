@@ -33,7 +33,6 @@ const TenantPaymentScreen = ({ navigation, route }) => {
   const [paymentData, setPaymentData] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
   const [selectedAmount, setSelectedAmount] = useState("full");
-  const [paymentMethod, setPaymentMethod] = useState("upi");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("idle"); // idle, processing, success, failed
@@ -419,55 +418,6 @@ const TenantPaymentScreen = ({ navigation, route }) => {
             )}
           </View>
 
-          {paymentStatus === "idle" && (
-            <View style={styles.paymentMethods}>
-              <Text style={styles.methodsTitle}>Payment Method</Text>
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethod,
-                  paymentMethod === "upi" && styles.selectedMethod,
-                ]}
-                onPress={() => setPaymentMethod("upi")}
-              >
-                <Ionicons
-                  name="phone-portrait"
-                  size={24}
-                  color={colors.primary}
-                />
-                <Text style={styles.methodText}>UPI Payment</Text>
-                <Ionicons
-                  name={
-                    paymentMethod === "upi"
-                      ? "radio-button-on"
-                      : "radio-button-off"
-                  }
-                  size={20}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethod,
-                  paymentMethod === "card" && styles.selectedMethod,
-                ]}
-                onPress={() => setPaymentMethod("card")}
-              >
-                <Ionicons name="card" size={24} color={colors.primary} />
-                <Text style={styles.methodText}>Card Payment</Text>
-                <Ionicons
-                  name={
-                    paymentMethod === "card"
-                      ? "radio-button-on"
-                      : "radio-button-off"
-                  }
-                  size={20}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-
           {paymentStatus === "processing" && (
             <View style={styles.processingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -726,7 +676,7 @@ const TenantPaymentScreen = ({ navigation, route }) => {
           disabled={getPaymentAmount() <= 0}
         />
       </ScrollView>
-
+ 
       {renderPaymentModal()}
     </LinearGradient>
   );
@@ -932,34 +882,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: spacing.sm,
   },
-  paymentMethods: {
-    marginBottom: spacing.lg,
-  },
-  methodsTitle: {
-    ...typography.h6,
-    color: colors.text,
-    marginBottom: spacing.md,
-    fontWeight: "600",
-  },
-  paymentMethod: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    borderRadius: 12,
-    marginBottom: spacing.sm,
-  },
-  selectedMethod: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + "10",
-  },
-  methodText: {
-    ...typography.body1,
-    color: colors.text,
-    marginLeft: spacing.md,
-    flex: 1,
-  },
   processingContainer: {
     alignItems: "center",
     paddingVertical: spacing.xl,
@@ -1016,6 +938,8 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     marginRight: spacing.sm,
+    marginBottom: spacing.xl,
+    backgroundColor: 'transparent',
   },
 });
 

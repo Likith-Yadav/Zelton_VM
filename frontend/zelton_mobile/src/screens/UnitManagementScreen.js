@@ -52,8 +52,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
     unit_number: "",
     unit_type: "1bhk",
     rent_amount: "",
-    security_deposit: "",
-    maintenance_charge: "",
     rent_due_date: "",
     area_sqft: "",
     description: "",
@@ -160,8 +158,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
       unit_number: "",
       unit_type: "1bhk",
       rent_amount: "",
-      security_deposit: "",
-      maintenance_charge: "",
       rent_due_date: "",
       area_sqft: "",
       description: "",
@@ -203,8 +199,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
       unit_number: unit.unit_number,
       unit_type: unit.unit_type,
       rent_amount: unit.rent_amount.toString(),
-      security_deposit: unit.security_deposit.toString(),
-      maintenance_charge: unit.maintenance_charge.toString(),
       rent_due_date: unit.rent_due_date,
       area_sqft: unit.area_sqft ? unit.area_sqft.toString() : "",
       description: unit.description || "",
@@ -246,8 +240,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
         ...formData,
         property: property.id,
         rent_amount: parseFloat(formData.rent_amount),
-        security_deposit: parseFloat(formData.security_deposit),
-        maintenance_charge: parseFloat(formData.maintenance_charge),
         rent_due_date: parseInt(formData.rent_due_date),
         area_sqft: formData.area_sqft ? parseInt(formData.area_sqft) : null,
       };
@@ -744,27 +736,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
             </Text>
           </View>
 
-          <View style={styles.unitDetailItem}>
-            <Ionicons
-              name="shield-checkmark"
-              size={16}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.unitDetailLabel}>Security Deposit</Text>
-            <Text style={styles.unitDetailValue}>
-              {formatCurrency(unit.security_deposit)}
-            </Text>
-          </View>
         </View>
 
         <View style={styles.unitDetailsRow}>
-          <View style={styles.unitDetailItem}>
-            <Ionicons name="construct" size={16} color={colors.textSecondary} />
-            <Text style={styles.unitDetailLabel}>Maintenance Charge</Text>
-            <Text style={styles.unitDetailValue}>
-              {formatCurrency(unit.maintenance_charge)}
-            </Text>
-          </View>
 
           <View style={styles.unitDetailItem}>
             <Ionicons name="calendar" size={16} color={colors.textSecondary} />
@@ -1007,6 +981,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.inputLabel}>Rent Amount (₹) *</Text>
+              <Text style={styles.maintenanceSubtitle}>
+                  Add maintenance amount with rent amount.
+                </Text>
               <TextInput
                 style={styles.textInput}
                 value={formData.rent_amount}
@@ -1018,34 +995,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
                 keyboardType="numeric"
               />
 
-              <View style={styles.row}>
-                <View style={styles.halfWidth}>
-                  <Text style={styles.inputLabel}>Security Deposit (₹)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formData.security_deposit}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, security_deposit: text })
-                    }
-                    placeholder="0"
-                    placeholderTextColor={colors.textLight}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={styles.halfWidth}>
-                  <Text style={styles.inputLabel}>Maintenance (₹)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formData.maintenance_charge}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, maintenance_charge: text })
-                    }
-                    placeholder="0"
-                    placeholderTextColor={colors.textLight}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
 
               <View style={styles.row}>
                 <View style={styles.halfWidth}>

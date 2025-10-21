@@ -10,7 +10,7 @@ from phonepe.sdk.pg.common.models.request.meta_info import MetaInfo
 from phonepe.sdk.pg.env import Env
 from phonepe.sdk.pg.common.exceptions import PhonePeException
 
-from core.models import Payment, OwnerSubscriptionPayment, PaymentTransaction
+from core.models import Payment, OwnerSubscriptionPayment, OwnerPayment, PaymentTransaction
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -285,6 +285,7 @@ class PhonePeService:
             # Find payment record
             payment = Payment.objects.filter(merchant_order_id=merchant_order_id).first()
             subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=merchant_order_id).first()
+            owner_payment = OwnerPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             
             if payment:
                 payment.status = 'completed'
@@ -300,6 +301,37 @@ class PhonePeService:
                 
                 logger.info(f"Tenant payment {payment.id} marked as completed")
                 return {'success': True, 'payment_type': 'tenant', 'payment_id': payment.id}
+            
+            elif owner_payment:
+                # Handle new OwnerPayment model
+                owner_payment.status = 'completed'
+                owner_payment.payment_date = timezone.now()
+                
+                # Set subscription dates
+                now = timezone.now()
+                owner_payment.subscription_start_date = now
+                
+                if owner_payment.pricing_plan:
+                    # Determine period based on amount (this is a fallback)
+                    # In practice, the period should be stored in the payment record
+                    if owner_payment.amount >= owner_payment.pricing_plan.yearly_price:
+                        owner_payment.subscription_end_date = now + timedelta(days=365)
+                    else:
+                        owner_payment.subscription_end_date = now + timedelta(days=30)
+                
+                owner_payment.save()
+                
+                # Update owner subscription status
+                owner = owner_payment.owner
+                owner.subscription_status = 'active'
+                if owner_payment.pricing_plan:
+                    owner.subscription_plan = owner_payment.pricing_plan
+                owner.subscription_start_date = now
+                owner.subscription_end_date = owner_payment.subscription_end_date
+                owner.save()
+                
+                logger.info(f"Owner payment {owner_payment.id} marked as completed")
+                return {'success': True, 'payment_type': 'owner', 'payment_id': owner_payment.id}
             
             elif subscription_payment:
                 subscription_payment.status = 'completed'
@@ -342,6 +374,7 @@ class PhonePeService:
             # Find payment record
             payment = Payment.objects.filter(merchant_order_id=merchant_order_id).first()
             subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=merchant_order_id).first()
+            owner_payment = OwnerPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             
             if payment:
                 payment.status = 'failed'
@@ -356,6 +389,14 @@ class PhonePeService:
                 
                 logger.info(f"Tenant payment {payment.id} marked as failed")
                 return {'success': True, 'payment_type': 'tenant', 'payment_id': payment.id}
+            
+            elif owner_payment:
+                # Handle new OwnerPayment model
+                owner_payment.status = 'failed'
+                owner_payment.save()
+                
+                logger.info(f"Owner payment {owner_payment.id} marked as failed")
+                return {'success': True, 'payment_type': 'owner', 'payment_id': owner_payment.id}
             
             elif subscription_payment:
                 subscription_payment.status = 'failed'

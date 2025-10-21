@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   Animated,
+  Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,6 +35,7 @@ const PricingScreen = ({ navigation, route }) => {
   const [pricingPlans, setPricingPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [scrollY] = useState(new Animated.Value(0));
+  const [userData, setUserData] = useState(null);
 
   // Convert property count range to numeric value for comparison
   const getPropertyCountValue = (count) => {
@@ -58,6 +60,7 @@ const PricingScreen = ({ navigation, route }) => {
   useEffect(() => {
     console.log("PricingScreen mounted, loading pricing plans...");
     loadPricingPlans();
+    loadUserData();
   }, [propertyCount]);
 
   useEffect(() => {
@@ -68,6 +71,17 @@ const PricingScreen = ({ navigation, route }) => {
       }
     }
   }, [route.params]);
+
+  const loadUserData = async () => {
+    try {
+      const userDataResponse = await AuthService.getStoredUserData();
+      if (userDataResponse.success) {
+        setUserData(userDataResponse.data);
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error);
+    }
+  };
 
   const loadPricingPlans = async () => {
     try {
@@ -140,6 +154,36 @@ const PricingScreen = ({ navigation, route }) => {
   };
 
   const handlePlanSelect = (planId) => {
+    const plan = pricingPlans.find((p) => p.id === planId);
+    
+    // Check for downgrade prevention
+    if (userData && userData.data && userData.data.profile && userData.data.profile.subscription_plan) {
+      const currentPlan = userData.data.profile.subscription_plan;
+      
+      // If the selected plan has fewer max units than current plan, it's a downgrade
+      if (plan.max_units < currentPlan.max_units) {
+        Alert.alert(
+          "Downgrade Not Allowed",
+          `You cannot downgrade from ${currentPlan.name} (${currentPlan.max_units} units) to ${plan.name} (${plan.max_units} units). Please contact our sales team at sales@zelton.in for assistance.`,
+          [
+            {
+              text: "Contact Sales",
+              onPress: () => {
+                // Open email client
+                const emailUrl = `mailto:sales@zelton.in?subject=Plan Downgrade Request&body=Hello,%0D%0A%0D%0AI would like to request a downgrade from ${currentPlan.name} to ${plan.name}.%0D%0A%0D%0APlease provide assistance.%0D%0A%0D%0AThank you.`;
+                Linking.openURL(emailUrl).catch(err => {
+                  console.error('Error opening email client:', err);
+                  Alert.alert('Error', 'Could not open email client. Please contact sales@zelton.in directly.');
+                });
+              }
+            },
+            { text: "Cancel", style: "cancel" }
+          ]
+        );
+        return;
+      }
+    }
+    
     setSelectedPlan(planId);
   };
 
