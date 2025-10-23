@@ -1729,6 +1729,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.md,
   },
+  maintenanceSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    marginBottom: spacing.sm,
+  },
   textInput: {
     ...typography.body1,
     color: colors.text,

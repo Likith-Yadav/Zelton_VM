@@ -2,10 +2,10 @@
   "expo": {
     "name": "ZeltonLivings",
     "slug": "zeltonlivings_mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Property management app for owners and tenants",
     "orientation": "portrait",
-    "icon": "./assets/adaptive-icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -15,31 +15,28 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": false,
-      "package": "com.zeltonlivings.mobile",
-      "config": {
-        "compileSdkVersion": 34,
-        "targetSdkVersion": 34,
-        "minSdkVersion": 21
-      }
-    },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "scheme": "zeltonlivings",
-    "extra": {
-      "eas": {
-        "projectId": "2716475d-45e8-41c1-9169-9c4bd2c131e0"
-      }
-    },
     "plugins": [
       "expo-font"
     ],
-    "owner": "testingz6"
+    "extra": {
+      "eas": {
+        "projectId": "986403db-373a-4c03-af68-7c98fc067a9d"
+      }
+    },
+    "android": {
+      "package": "com.zeltonlivings.mobile",
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "versionCode": 2,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "privacyPolicy": "https://zelton.in/privacy-policy"
+    },
+    "owner": ""
   }
 }

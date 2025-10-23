@@ -194,7 +194,7 @@ STATIC_URL = "assets/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Media files (User uploaded files)
-MEDIA_URL = "/media/"
+MEDIA_URL = "/backend/media/"
 MEDIA_ROOT = "/ZeltonLivings/dbdata/media"
 
 # Default primary key field type
@@ -286,7 +286,7 @@ EMAIL_TIMEOUT = 30  # Add timeout
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Media files (for file uploads) - Updated to use new directory
-MEDIA_URL = '/media/'
+MEDIA_URL = '/backend/media/'
 MEDIA_ROOT = '/ZeltonLivings/dbdata/media'
 
 # Domain configuration for absolute URLs
