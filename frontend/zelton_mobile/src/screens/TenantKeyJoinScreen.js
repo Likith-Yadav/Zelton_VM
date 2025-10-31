@@ -394,27 +394,6 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
             Enter the tenant key provided by your landlord
           </Text>
         </View>
-
-        {/* Instructions */}
-        <GradientCard variant="primary" style={styles.instructionsCard}>
-          <View style={styles.instructionsHeader}>
-            <Ionicons
-              name="information-circle"
-              size={24}
-              color={colors.white}
-            />
-            <Text style={styles.instructionsTitle}>
-              How to get a tenant key?
-            </Text>
-          </View>
-          <Text style={styles.instructionsText}>
-            1. Contact your landlord{"\n"}
-            2. Ask them to generate a tenant key from their ZeltonLivings app
-            {"\n"}
-            3. Enter the 8-character key below
-          </Text>
-        </GradientCard>
-
         {/* Key Input */}
         <View style={[styles.keyInputContainer, keyboardVisible ? { marginBottom: spacing.xxl } : null]}>
           <InputField
@@ -436,6 +415,27 @@ const TenantKeyJoinScreen = ({ navigation, route }) => {
             <Text style={styles.errorText}>{inputError}</Text>
           ) : null}
         </View>
+
+        {/* Instructions */}
+        <GradientCard variant="primary" style={styles.instructionsCard}>
+          <View style={styles.instructionsHeader}>
+            <Ionicons
+              name="information-circle"
+              size={24}
+              color={colors.white}
+            />
+            <Text style={styles.instructionsTitle}>
+              How to get a tenant key?
+            </Text>
+          </View>
+          <Text style={styles.instructionsText}>
+            1. Contact your landlord{"\n"}
+            2. Ask them to generate a tenant key from their ZeltonLivings app
+            {"\n"}
+            3. Enter the 8-character key below
+          </Text>
+        </GradientCard>
+
 
         {/* Join Button */}
         <GradientButton

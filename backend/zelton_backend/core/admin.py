@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice,
-    PaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    TenantDocument, OwnerSubscriptionPayment, OwnerPayment
+    PaymentProof, ManualPaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
+    TenantDocument, OwnerSubscriptionPayment, OwnerPayment, OwnerPayout
 )
 
 
@@ -380,4 +380,166 @@ class OwnerPaymentAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj=None):
         """Allow deleting payments (with caution)"""
+        return True
+
+@admin.register(ManualPaymentProof)
+class ManualPaymentProofAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'get_tenant_name', 'get_unit_number', 'get_property_name', 
+        'amount', 'verification_status', 'get_owner_name', 'uploaded_at', 'verified_at'
+    ]
+    list_filter = ['verification_status', 'uploaded_at', 'verified_at', 'unit__property__owner']
+    search_fields = [
+        'tenant__user__first_name', 'tenant__user__last_name', 'tenant__user__email',
+        'unit__unit_number', 'unit__property__name', 'unit__property__owner__user__email'
+    ]
+    readonly_fields = [
+        'id', 'uploaded_at', 'updated_at', 'verified_at', 'verified_by'
+    ]
+    fieldsets = (
+        ('Payment Details', {
+            'fields': ('tenant', 'unit', 'amount', 'payment_proof_image', 'description')
+        }),
+        ('Verification Details', {
+            'fields': ('verification_status', 'verified_by', 'verification_notes', 'verified_at')
+        }),
+        ('Timestamps', {
+            'fields': ('uploaded_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_tenant_name(self, obj):
+        '''Display tenant name'''
+        return f'{obj.tenant.user.first_name} {obj.tenant.user.last_name}'.strip() or obj.tenant.user.email
+    get_tenant_name.short_description = 'Tenant'
+    get_tenant_name.admin_order_field = 'tenant__user__first_name'
+    
+    def get_unit_number(self, obj):
+        '''Display unit number'''
+        return obj.unit.unit_number
+    get_unit_number.short_description = 'Unit'
+    get_unit_number.admin_order_field = 'unit__unit_number'
+    
+    def get_property_name(self, obj):
+        '''Display property name'''
+        return obj.unit.property.name
+    get_property_name.short_description = 'Property'
+    get_property_name.admin_order_field = 'unit__property__name'
+    
+    def get_owner_name(self, obj):
+        '''Display owner name'''
+        return f'{obj.unit.property.owner.user.first_name} {obj.unit.property.owner.user.last_name}'.strip() or obj.unit.property.owner.user.email
+    get_owner_name.short_description = 'Owner'
+    get_owner_name.admin_order_field = 'unit__property__owner__user__first_name'
+    
+    def has_add_permission(self, request):
+        '''Only allow adding through API'''
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        '''Allow changing verification status'''
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        '''Allow deleting payment proofs'''
+        return True
+
+
+@admin.register(OwnerPayout)
+class OwnerPayoutAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'get_owner_name', 'get_payment_info', 'amount', 'status',
+        'beneficiary_type', 'retry_count', 'initiated_at', 'completed_at'
+    ]
+    list_filter = [
+        'status', 'beneficiary_type', 'initiated_at', 'completed_at'
+    ]
+    search_fields = [
+        'owner__user__first_name', 'owner__user__last_name', 'owner__user__email',
+        'cashfree_transfer_id', 'cashfree_utr', 'payment__id'
+    ]
+    readonly_fields = [
+        'payment', 'owner', 'amount', 'cashfree_transfer_id', 'cashfree_reference_id',
+        'cashfree_utr', 'cashfree_response', 'initiated_at', 'completed_at',
+        'last_retry_at', 'next_retry_at'
+    ]
+    date_hierarchy = 'initiated_at'
+    ordering = ['-initiated_at']
+    
+    fieldsets = (
+        ('Payout Information', {
+            'fields': ('payment', 'owner', 'amount', 'status', 'beneficiary_type')
+        }),
+        ('Cashfree Details', {
+            'fields': ('cashfree_transfer_id', 'cashfree_reference_id', 'cashfree_utr', 'cashfree_response'),
+            'classes': ('collapse',)
+        }),
+        ('Retry Information', {
+            'fields': ('retry_count', 'max_retries', 'last_retry_at', 'next_retry_at', 'error_message')
+        }),
+        ('Timestamps', {
+            'fields': ('initiated_at', 'completed_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['retry_failed_payouts', 'check_payout_status']
+    
+    def get_owner_name(self, obj):
+        """Display owner's full name"""
+        return f"{obj.owner.user.first_name} {obj.owner.user.last_name}".strip() or obj.owner.user.email
+    get_owner_name.short_description = 'Owner'
+    get_owner_name.admin_order_field = 'owner__user__first_name'
+    
+    def get_payment_info(self, obj):
+        """Display payment and unit information"""
+        return f"Payment #{obj.payment.id} - Unit {obj.payment.unit.unit_number}"
+    get_payment_info.short_description = 'Payment Info'
+    get_payment_info.admin_order_field = 'payment__id'
+    
+    def retry_failed_payouts(self, request, queryset):
+        """Manually retry selected failed payouts"""
+        from core.services.cashfree_payout_service import CashfreePayoutService
+        
+        failed_payouts = queryset.filter(status__in=['failed', 'retry_scheduled'])
+        success_count = 0
+        
+        for payout in failed_payouts:
+            result = CashfreePayoutService.retry_failed_payout(payout.id)
+            if result['success']:
+                success_count += 1
+        
+        self.message_user(request, f'{success_count} out of {failed_payouts.count()} payouts retried successfully.')
+    retry_failed_payouts.short_description = "Retry selected failed payouts"
+    
+    def check_payout_status(self, request, queryset):
+        """Check status of selected payouts with Cashfree"""
+        from core.services.cashfree_payout_service import CashfreePayoutService
+        
+        success_count = 0
+        for payout in queryset:
+            result = CashfreePayoutService.check_payout_status(payout.id)
+            if result['success']:
+                success_count += 1
+        
+        self.message_user(request, f'Status checked for {success_count} out of {queryset.count()} payouts.')
+    check_payout_status.short_description = "Check status with Cashfree"
+    
+    def get_queryset(self, request):
+        """Optimize queryset with select_related"""
+        return super().get_queryset(request).select_related(
+            'owner__user', 'payment__unit__property', 'payment__tenant__user'
+        )
+    
+    def has_add_permission(self, request):
+        """Don't allow manual creation - payouts are auto-generated"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Allow editing status and retry settings"""
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting payouts (with caution)"""
         return True

@@ -14,7 +14,7 @@ export const colors = {
   surface: '#FFFFFF',
   surfaceVariant: '#F1F5F9',
   error: '#EF4444',
-  warning: '#F59E0B',
+  warning: '#C20A0A',
   success: '#10B981',
   info: '#3B82F6',
   text: '#1F2937',

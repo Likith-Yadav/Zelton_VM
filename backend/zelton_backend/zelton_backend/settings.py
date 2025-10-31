@@ -26,7 +26,7 @@ SECRET_KEY = config('SECRET_KEY', default="django-insecure-0d&8slnl6z&06&h(m(1d(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True  # Force DEBUG mode for development
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', '20.192.27.16', 'localhost', '127.0.0.1', 'api.zelton.in']
 
 # Domain configuration for absolute URLs
 USE_TZ = True
@@ -210,6 +210,11 @@ PHONEPE_ENVIRONMENT = config('PHONEPE_ENVIRONMENT', default='SANDBOX')
 PHONEPE_WEBHOOK_USERNAME = config('PHONEPE_WEBHOOK_USERNAME')
 PHONEPE_WEBHOOK_PASSWORD = config('PHONEPE_WEBHOOK_PASSWORD')
 PHONEPE_REDIRECT_BASE_URL = config('PHONEPE_REDIRECT_BASE_URL', default='http://api.zelton.in')
+
+# Cashfree Payout configuration for development
+CASHFREE_CLIENT_ID = config('CASHFREE_CLIENT_ID', default='')
+CASHFREE_CLIENT_SECRET = config('CASHFREE_CLIENT_SECRET', default='')
+CASHFREE_ENVIRONMENT = config('CASHFREE_ENVIRONMENT', default='TEST')  # PRODUCTION or TEST
 
 # Logging Configuration
 LOGGING = {

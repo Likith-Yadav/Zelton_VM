@@ -382,22 +382,31 @@ class AuthViewSet(viewsets.ViewSet):
             from django.conf import settings
             
             subject = 'Verify Your Email - ZeltonLivings Account'
+            
+            # Plain text version
             message = f'''Dear {to_name},
 
-Thank you for registering with ZeltonLivings!
+Your verification code is: {verification_code}
 
-Your email verification code is: {verification_code}
-
-Please enter this code in the app to complete your account setup.
-
-This verification code is valid for 10 minutes.
-
-If you did not create an account with ZeltonLivings, please disregard this email.
-
-For support, contact us at support@zeltonlivings.com
+This code is valid for 10 minutes.
 
 Best regards,
 The ZeltonLivings Team'''
+            
+            # HTML version with styled OTP
+            html_message = f'''
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <p>Dear {to_name},</p>
+                    <p>Your verification code is:</p>
+                    <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                        <span style="font-size: 56px; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; font-family: 'Arial Black', Arial, sans-serif;">{verification_code}</span>
+                    </div>
+                    <p>This code is valid for 10 minutes.</p>
+                    <p>Best regards,<br>The ZeltonLivings Team</p>
+                </body>
+            </html>
+            '''
             
             print(f"=== SENDING EMAIL VIA SMTP ===")
             print(f"To: {to_email}")
@@ -413,6 +422,7 @@ The ZeltonLivings Team'''
                     settings.DEFAULT_FROM_EMAIL,
                     [to_email],
                     fail_silently=False,
+                    html_message=html_message,
                 )
                 print(f"Email sent successfully to {to_email}")
                 return Response({
@@ -669,20 +679,35 @@ The ZeltonLivings Team'''
             from django.conf import settings
             
             subject = 'ZeltonLivings - Password Reset Verification'
+            
+            # Plain text version
             message = f"""
 Hello {user.first_name},
 
-You requested a password reset for your ZeltonLivings account.
+Your password reset verification code is:
 
-Your verification code is: {verification_code}
+{verification_code}
 
 This code will expire in 10 minutes.
-
-If you didn't request this password reset, please ignore this email.
 
 Best regards,
 ZeltonLivings Team
 """
+            
+            # HTML version with styled OTP
+            html_message = f'''
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <p>Hello {user.first_name},</p>
+                    <p>Your password reset verification code is:</p>
+                    <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                        <span style="font-size: 56px; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; font-family: 'Arial Black', Arial, sans-serif;">{verification_code}</span>
+                    </div>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>Best regards,<br>ZeltonLivings Team</p>
+                </body>
+            </html>
+            '''
             
             send_mail(
                 subject,
@@ -690,6 +715,7 @@ ZeltonLivings Team
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
                 fail_silently=False,
+                html_message=html_message,
             )
             
             return Response({

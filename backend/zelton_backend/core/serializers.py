@@ -4,8 +4,8 @@ from django.utils import timezone
 import re
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice, 
-    PaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    OwnerSubscriptionPayment, TenantDocument, OwnerPayment
+    PaymentProof, ManualPaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
+    OwnerSubscriptionPayment, TenantDocument, OwnerPayment, OwnerPayout
 )
 
 
@@ -299,16 +299,66 @@ class TenantKeySerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'key', 'created_at']
 
 
+class OwnerPayoutSerializer(serializers.ModelSerializer):
+    owner_name = serializers.SerializerMethodField()
+    payment_details = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = OwnerPayout
+        fields = [
+            'id', 'payment', 'owner', 'owner_name', 'amount', 'status',
+            'beneficiary_type', 'cashfree_transfer_id', 'cashfree_utr',
+            'retry_count', 'max_retries', 'initiated_at', 'completed_at',
+            'error_message', 'payment_details'
+        ]
+        read_only_fields = ['id', 'initiated_at', 'completed_at']
+    
+    def get_owner_name(self, obj):
+        return f"{obj.owner.user.first_name} {obj.owner.user.last_name}"
+    
+    def get_payment_details(self, obj):
+        return {
+            'unit_number': obj.payment.unit.unit_number,
+            'property_name': obj.payment.unit.property.name,
+            'tenant_name': obj.payment.tenant.user.get_full_name()
+        }
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     tenant_name = serializers.CharField(source='tenant.user.get_full_name', read_only=True)
     unit_number = serializers.CharField(source='unit.unit_number', read_only=True)
     property_name = serializers.CharField(source='unit.property.name', read_only=True)
     reconciliation_status = serializers.SerializerMethodField()
+    payout_status = serializers.SerializerMethodField()
+    payout_message = serializers.SerializerMethodField()
     
     def get_reconciliation_status(self, obj):
         """Get reconciliation status from related transaction"""
         transaction = obj.transactions.first()
         return transaction.reconciliation_status if transaction else 'not_started'
+    
+    def get_payout_status(self, obj):
+        """Get payout status for owner visibility"""
+        try:
+            payout = obj.owner_payout
+            return payout.status
+        except:
+            return 'not_initiated'
+    
+    def get_payout_message(self, obj):
+        """Get user-friendly payout message"""
+        try:
+            payout = obj.owner_payout
+            if payout.status == 'completed':
+                return 'Payment transferred successfully'
+            elif payout.status in ['pending', 'processing', 'retry_scheduled']:
+                return 'Payment processing, contact admin if delayed'
+            elif payout.status == 'failed':
+                return 'Payment processing failed, contact admin'
+            else:
+                return 'Payment processing'
+        except:
+            return 'Payout not initiated'
     
     class Meta:
         model = Payment
@@ -316,7 +366,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             'id', 'tenant', 'tenant_name', 'unit', 'unit_number', 'property_name',
             'amount', 'payment_type', 'status', 'payment_date', 'due_date',
             'merchant_order_id', 'phonepe_transaction_id', 'phonepe_payment_id', 'phonepe_order_id',
-            'reconciliation_status', 'created_at', 'updated_at'
+            'reconciliation_status', 'payout_status', 'payout_message', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -472,5 +522,72 @@ class TenantDocumentSerializer(serializers.ModelSerializer):
     def get_unit_number(self, obj):
         """Get unit number"""
         return obj.unit.unit_number
+
+
+class ManualPaymentProofSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source='tenant.user.get_full_name', read_only=True)
+    tenant_email = serializers.CharField(source='tenant.user.email', read_only=True)
+    unit_number = serializers.CharField(source='unit.unit_number', read_only=True)
+    property_name = serializers.CharField(source='unit.property.name', read_only=True)
+    owner_name = serializers.CharField(source='owner.user.get_full_name', read_only=True)
+    verified_by_name = serializers.CharField(source='verified_by.get_full_name', read_only=True)
+    payment_proof_image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ManualPaymentProof
+        fields = [
+            'id', 'tenant', 'unit', 'amount', 'payment_proof_image', 'payment_proof_image_url',
+            'description', 'verification_status', 'verified_by', 'verified_by_name',
+            'verification_notes', 'verified_at', 'uploaded_at', 'updated_at',
+            'tenant_name', 'tenant_email', 'unit_number', 'property_name', 'owner_name'
+        ]
+        read_only_fields = [
+            'id', 'verified_by', 'verified_by_name', 'verified_at', 'uploaded_at', 'updated_at',
+            'tenant_name', 'tenant_email', 'unit_number', 'property_name', 'owner_name',
+            'payment_proof_image_url'
+        ]
+    
+    def get_payment_proof_image_url(self, obj):
+        """Get the full URL for the payment proof image"""
+        if obj.payment_proof_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.payment_proof_image.url)
+            return obj.payment_proof_image.url
+        return None
+
+
+class ManualPaymentProofCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating manual payment proofs (tenant upload)"""
+    
+    class Meta:
+        model = ManualPaymentProof
+        fields = ['unit', 'amount', 'payment_proof_image', 'description']
+    
+    def validate_amount(self, value):
+        """Validate that amount is positive"""
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0")
+        return value
+    
+    def validate(self, data):
+        """Validate the entire data"""
+        if not data.get('payment_proof_image'):
+            raise serializers.ValidationError({"payment_proof_image": "Payment proof image is required"})
+        return data
+
+
+class ManualPaymentProofVerificationSerializer(serializers.ModelSerializer):
+    """Serializer for owner verification of payment proofs"""
+    
+    class Meta:
+        model = ManualPaymentProof
+        fields = ['verification_status', 'verification_notes']
+    
+    def validate_verification_status(self, value):
+        """Validate verification status"""
+        if value not in ['verified', 'rejected']:
+            raise serializers.ValidationError("Verification status must be 'verified' or 'rejected'")
+        return value
 
 

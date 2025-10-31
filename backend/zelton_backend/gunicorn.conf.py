@@ -28,7 +28,7 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"
 proc_name = "zelton_backend"
 
 # Server mechanics
-daemon = False
+daemon = True
 pidfile = "/ZeltonLivings/appsdata/backend/zelton_backend/gunicorn.pid"
 user = "zelton"
 group = "zelton"

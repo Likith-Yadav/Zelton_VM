@@ -447,7 +447,7 @@ class DataService {
   }
 
   async downloadTenantDocumentAsOwner(documentId) {
-    return await this.apiCall(`/api/tenant-documents/download/${documentId}/`);
+    return await this.apiCall(`/api/tenant-documents/download/${documentId}`);
   }
 }
 

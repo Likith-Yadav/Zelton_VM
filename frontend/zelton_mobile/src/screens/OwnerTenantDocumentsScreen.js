@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import GradientCard from "../components/GradientCard";
 import {
@@ -73,17 +73,22 @@ const OwnerTenantDocumentsScreen = ({ navigation, route }) => {
         document.id
       );
       console.log("Download response:", response);
+      console.log("Response data:", JSON.stringify(response.data, null, 2));
+      console.log("Response success:", response.success);
+      console.log("Response data success:", response.data?.success);
 
       if (response.success && response.data.success) {
         // Handle response structure - backend returns flat structure
         const downloadUrl = response.data.download_url;
         const fileName = response.data.file_name;
+        const debugInfo = response.data.debug_info;
 
         console.log("Download URL:", downloadUrl);
         console.log("File name:", fileName);
+        console.log("Debug info:", debugInfo);
 
         if (!downloadUrl || !fileName) {
-          Alert.alert("Error", "Invalid download response from server");
+          Alert.alert("Error", `Invalid download response from server. URL: ${downloadUrl}, File: ${fileName}`);
           return;
         }
 
@@ -134,14 +139,18 @@ const OwnerTenantDocumentsScreen = ({ navigation, route }) => {
             ]
           );
         } else {
-          Alert.alert("Error", "Failed to download document");
+          console.error("Download failed with status:", downloadResult.status);
+          Alert.alert("Error", `Failed to download document. Status: ${downloadResult.status}`);
         }
       } else {
-        Alert.alert("Error", response.error);
+        const errorMsg = response.error || response.data?.error || "Unknown error";
+        console.error("Download API error:", errorMsg);
+        Alert.alert("Error", errorMsg);
       }
     } catch (error) {
       console.error("Error downloading document:", error);
-      Alert.alert("Error", "Failed to download document");
+      console.error("Error details:", error.message, error.stack);
+      Alert.alert("Error", `Failed to download document: ${error.message}`);
     }
   };
 

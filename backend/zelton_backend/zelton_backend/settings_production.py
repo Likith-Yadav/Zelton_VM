@@ -170,6 +170,14 @@ LOGGING = {
             'backupCount': 10,
             'formatter': 'verbose',
         },
+        'cashfree_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': '/ZeltonLivings/dbdata/logs/cashfree.log',
+            'maxBytes': 1024*1024*15,  # 15MB
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
@@ -192,6 +200,11 @@ LOGGING = {
         },
         'core.services.phonepe_service': {
             'handlers': ['phonepe_file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'core.services.cashfree_payout_service': {
+            'handlers': ['cashfree_file'],
             'level': 'INFO',
             'propagate': True,
         },
@@ -248,6 +261,11 @@ PHONEPE_ENVIRONMENT = config('PHONEPE_ENVIRONMENT', default='PRODUCTION')
 PHONEPE_WEBHOOK_USERNAME = config('PHONEPE_WEBHOOK_USERNAME')
 PHONEPE_WEBHOOK_PASSWORD = config('PHONEPE_WEBHOOK_PASSWORD')
 PHONEPE_REDIRECT_BASE_URL = config('PHONEPE_REDIRECT_BASE_URL')
+
+# Cashfree Payout configuration for production
+CASHFREE_CLIENT_ID = config('CASHFREE_CLIENT_ID', default='')
+CASHFREE_CLIENT_SECRET = config('CASHFREE_CLIENT_SECRET', default='')
+CASHFREE_ENVIRONMENT = config('CASHFREE_ENVIRONMENT', default='PRODUCTION')  # PRODUCTION or TEST
 
 # Sentry configuration for error tracking (disabled temporarily)
 # import sentry_sdk

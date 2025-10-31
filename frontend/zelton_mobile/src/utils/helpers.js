@@ -53,7 +53,7 @@ export const formatCurrency = (amount) => {
 };
 
 export const formatDate = (date, options = {}) => {
-  if (!date) return "N/A";
+  if (!date) return "--";  // Changed from "N/A" to "--" for cleaner UI
 
   const defaultOptions = {
     year: "numeric",
@@ -64,7 +64,7 @@ export const formatDate = (date, options = {}) => {
   try {
     const dateObj = new Date(date);
     if (isNaN(dateObj.getTime())) {
-      return "Invalid Date";
+      return "--";  // Changed from "Invalid Date" to "--"
     }
     return new Intl.DateTimeFormat("en-IN", {
       ...defaultOptions,
@@ -72,17 +72,17 @@ export const formatDate = (date, options = {}) => {
     }).format(dateObj);
   } catch (error) {
     console.error("Error formatting date:", error, "Date value:", date);
-    return "Invalid Date";
+    return "--";  // Changed from "Invalid Date" to "--"
   }
 };
 
 export const formatDateTime = (date) => {
-  if (!date) return "N/A";
+  if (!date) return "--";  // Changed from "N/A" to "--" for consistency
 
   try {
     const dateObj = new Date(date);
     if (isNaN(dateObj.getTime())) {
-      return "Invalid Date";
+      return "--";  // Changed from "Invalid Date" to "--"
     }
     return new Intl.DateTimeFormat("en-IN", {
       year: "numeric",
@@ -93,7 +93,7 @@ export const formatDateTime = (date) => {
     }).format(dateObj);
   } catch (error) {
     console.error("Error formatting datetime:", error, "Date value:", date);
-    return "Invalid Date";
+    return "--";  // Changed from "Invalid Date" to "--"
   }
 };
 

@@ -300,6 +300,20 @@ class PhonePeService:
                     transaction.save()
                 
                 logger.info(f"Tenant payment {payment.id} marked as completed")
+                
+                # CRITICAL: Trigger Cashfree payout (synchronous but isolated with try-except)
+                try:
+                    from core.services.cashfree_payout_service import CashfreePayoutService
+                    payout_result = CashfreePayoutService.initiate_owner_payout(payment)
+                    
+                    if payout_result['success']:
+                        logger.info(f"Owner payout initiated: {payout_result.get('payout_record').id if payout_result.get('payout_record') else 'N/A'}")
+                    else:
+                        logger.warning(f"Owner payout failed but payment completed: {payout_result.get('error')}")
+                except Exception as e:
+                    # CRITICAL: Never let payout failure affect payment completion
+                    logger.error(f"Exception during payout initiation (payment still completed): {str(e)}")
+                
                 return {'success': True, 'payment_type': 'tenant', 'payment_id': payment.id}
             
             elif owner_payment:

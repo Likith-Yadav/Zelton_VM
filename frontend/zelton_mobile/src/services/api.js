@@ -5,24 +5,17 @@ import { API_BASE_URL, STORAGE_KEYS } from "../constants/constants";
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased timeout for file uploads
   headers: {
     "X-Requested-With": "XMLHttpRequest",
-    "Content-Type": "application/json",
     "Accept": "application/json",
   },
   // Allow all status codes to be handled properly
   validateStatus: function (status) {
     return status >= 200 && status < 600; // Allow all status codes
   },
-  // Enable credentials for session-based OTP verification
-  withCredentials: true,
-  // Add headers to help with CSRF
-  headers: {
-    "X-Requested-With": "XMLHttpRequest",
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-  },
+  // Disable credentials for better compatibility
+  withCredentials: false,
 });
 
 // Request interceptor to add auth token
@@ -322,6 +315,150 @@ export const isClientError = (error) => {
     error.response.status >= 400 &&
     error.response.status < 500
   );
+};
+
+// Test API connection
+export const testAPI = {
+  testConnection: async () => {
+    try {
+      console.log('Testing API connection...');
+      const response = await api.get('/api/pricing-plans/');
+      console.log('API connection test successful:', response.status);
+      return response;
+    } catch (error) {
+      console.error('API connection test failed:', error);
+      throw error;
+    }
+  },
+};
+
+// Payment Proof API functions
+export const paymentProofAPI = {
+  // Upload payment proof (Tenant) - Using fetch API like document upload
+  uploadPaymentProof: async (unitId, amount, paymentProofImage, description = "") => {
+    try {
+      console.log('Payment proof upload data:', {
+        unitId,
+        amount,
+        paymentProofImage,
+        description
+      });
+
+      // Create FormData for file upload with proper React Native format (same as tenant documents)
+      const formData = new FormData();
+      formData.append('unit', unitId);
+      formData.append('amount', amount);
+      
+      // For React Native, append the file object directly (same as document upload)
+      formData.append('payment_proof_image', {
+        uri: paymentProofImage.uri,
+        type: paymentProofImage.mimeType || paymentProofImage.type || 'image/jpeg',
+        name: paymentProofImage.name || paymentProofImage.fileName || 'payment_proof.jpg',
+      });
+      
+      formData.append('description', description || '');
+
+      console.log('Uploading payment proof:', {
+        unit: unitId,
+        amount: amount,
+        file_name: paymentProofImage.name || paymentProofImage.fileName,
+        file_size: paymentProofImage.fileSize,
+        file_type: paymentProofImage.mimeType || paymentProofImage.type,
+        description: description,
+      });
+
+      console.log('Making API request with fetch to:', '/api/manual-payment-proofs/');
+      
+      // Use fetch API directly (same as document upload) to avoid axios FormData issues
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);
+
+      const response = await fetch(`${API_BASE_URL}/api/manual-payment-proofs/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          // Don't set Content-Type - let fetch handle it for FormData
+        },
+        body: formData,
+      });
+
+      console.log('Fetch response status:', response.status);
+      console.log('Fetch response ok:', response.ok);
+      console.log('Fetch response headers:', response.headers);
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.log('Error response text:', responseText);
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (e) {
+          console.log('Response is not JSON:', responseText.substring(0, 200));
+        }
+        
+        throw new Error(errorData.error || errorData.detail || responseText.substring(0, 100) || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Payment proof upload response:', data);
+      
+      return { success: true, data };
+    } catch (error) {
+      console.error('Payment proof upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+      });
+      throw error;
+    }
+  },
+
+  // Get my payment proofs (Tenant)
+  getMyPaymentProofs: async () => {
+    try {
+      const response = await api.get('/api/manual-payment-proofs/my_proofs/');
+      return response;
+    } catch (error) {
+      console.error('Get payment proofs error:', error);
+      throw error;
+    }
+  },
+
+  // Get pending payment proofs (Owner)
+  getPendingPaymentProofs: async () => {
+    try {
+      const response = await api.get('/api/manual-payment-proofs/pending/');
+      return response;
+    } catch (error) {
+      console.error('Get pending payment proofs error:', error);
+      throw error;
+    }
+  },
+
+  // Verify payment proof (Owner)
+  verifyPaymentProof: async (proofId, verificationStatus, verificationNotes = "") => {
+    try {
+      const response = await api.post(`/api/manual-payment-proofs/${proofId}/verify/`, {
+        verification_status: verificationStatus,
+        verification_notes: verificationNotes,
+      });
+      return response;
+    } catch (error) {
+      console.error('Verify payment proof error:', error);
+      throw error;
+    }
+  },
+
+  // Get all payment proofs (Owner)
+  getAllPaymentProofs: async () => {
+    try {
+      const response = await api.get('/api/manual-payment-proofs/');
+      return response;
+    } catch (error) {
+      console.error('Get all payment proofs error:', error);
+      throw error;
+    }
+  },
 };
 
 export default api;

@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from "../utils/helpers";
 import DataService from "../services/dataService";
 import AuthService from "../services/authService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { paymentProofAPI } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -46,12 +47,17 @@ const OwnerDashboardScreen = ({ navigation }) => {
   // Profile data for user display
   const [profileData, setProfileData] = useState(null);
 
+  // Payment proofs data
+  const [paymentProofs, setPaymentProofs] = useState([]);
+  const [pendingProofsCount, setPendingProofsCount] = useState(0);
+
   // Loading and error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     loadDashboardData();
+    loadPaymentProofs();
   }, []);
 
   const loadDashboardData = async () => {
@@ -84,7 +90,9 @@ const OwnerDashboardScreen = ({ navigation }) => {
                 unit_number: payment.unit_number || "N/A",
                 amount: payment.amount,
                 status: payment.status,
-                payment_date: payment.payment_date,
+                payment_date: payment.payment_date || payment.created_at || payment.updated_at,
+                created_at: payment.created_at,
+                updated_at: payment.updated_at,
                 property_name: payment.property_name || "Property",
               }))
             : [],
@@ -94,7 +102,7 @@ const OwnerDashboardScreen = ({ navigation }) => {
                 name:
                   tenant.user?.first_name + " " + tenant.user?.last_name ||
                   "Tenant",
-                unit: tenant.tenant_keys?.first()?.unit?.unit_number || "N/A",
+                unit: tenant.tenant_keys?.[0]?.unit?.unit_number || tenant.unit_number || "--",
                 join_date: tenant.created_at,
               }))
             : [],
@@ -132,6 +140,54 @@ const OwnerDashboardScreen = ({ navigation }) => {
     }
   };
 
+  const loadPaymentProofs = async () => {
+    try {
+      console.log("Loading payment proofs for owner dashboard...");
+      const response = await paymentProofAPI.getAllPaymentProofs();
+      console.log("Payment proofs response:", response);
+      
+      if (response.data) {
+        // Handle different response structures
+        let proofsData = [];
+        if (Array.isArray(response.data)) {
+          proofsData = response.data;
+        } else if (response.data.results) {
+          proofsData = response.data.results;
+        } else if (response.data.data) {
+          proofsData = response.data.data;
+        }
+        
+        // Sort by uploaded date (most recent first) and take last 5
+        const sortedProofs = proofsData.sort(
+          (a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at)
+        );
+        setPaymentProofs(sortedProofs.slice(0, 5));
+        
+        // Count pending proofs
+        const pendingCount = proofsData.filter(
+          (proof) => proof.verification_status === "pending"
+        ).length;
+        setPendingProofsCount(pendingCount);
+        
+        console.log(
+          "Payment proofs loaded successfully:",
+          sortedProofs.length,
+          "total,",
+          pendingCount,
+          "pending"
+        );
+      } else {
+        console.error("Failed to load payment proofs:", response.data?.error);
+        setPaymentProofs([]);
+        setPendingProofsCount(0);
+      }
+    } catch (error) {
+      console.error("Error loading payment proofs:", error);
+      setPaymentProofs([]);
+      setPendingProofsCount(0);
+    }
+  };
+
   const loadTenantPaymentData = async () => {
     try {
       // Load tenant payment history to show in owner dashboard
@@ -149,7 +205,9 @@ const OwnerDashboardScreen = ({ navigation }) => {
           unit_number: payment.unit_number,
           amount: payment.amount,
           status: payment.status,
-          payment_date: payment.payment_date,
+          payment_date: payment.payment_date || payment.created_at || payment.updated_at,
+          created_at: payment.created_at,
+          updated_at: payment.updated_at,
           property_name: payment.property_name,
         }));
       }
@@ -211,7 +269,9 @@ const OwnerDashboardScreen = ({ navigation }) => {
           unit_number: payment.unit_number,
           amount: payment.amount,
           status: payment.status,
-          payment_date: payment.payment_date,
+          payment_date: payment.payment_date || payment.created_at || payment.updated_at,
+          created_at: payment.created_at,
+          updated_at: payment.updated_at,
           property_name: payment.property_name,
         }));
 
@@ -273,8 +333,48 @@ const OwnerDashboardScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData();
+    await Promise.all([loadDashboardData(), loadPaymentProofs()]);
     setRefreshing(false);
+  };
+
+  // Helper functions for payment proof status
+  const getProofStatusColor = (status) => {
+    switch (status) {
+      case "verified":
+        return colors.success;
+      case "rejected":
+        return colors.error;
+      case "pending":
+        return colors.warning;
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  const getProofStatusText = (status) => {
+    switch (status) {
+      case "verified":
+        return "Verified";
+      case "rejected":
+        return "Rejected";
+      case "pending":
+        return "Pending";
+      default:
+        return "Unknown";
+    }
+  };
+
+  const getProofStatusIcon = (status) => {
+    switch (status) {
+      case "verified":
+        return "checkmark-circle";
+      case "rejected":
+        return "close-circle";
+      case "pending":
+        return "time";
+      default:
+        return "help-circle";
+    }
   };
 
   const getStatusColor = (status) => {
@@ -487,6 +587,12 @@ const OwnerDashboardScreen = ({ navigation }) => {
               colors.success
             )}
             {renderQuickAction(
+              "Payment Proofs",
+              "receipt",
+              () => navigation.navigate("PaymentProofVerification"),
+              colors.warning
+            )}
+            {renderQuickAction(
               "Analytics",
               "analytics",
               () => navigation.navigate("Analytics"),
@@ -494,6 +600,142 @@ const OwnerDashboardScreen = ({ navigation }) => {
             )}
           </View>
         </View>
+
+        {/* Payment Proof Verification */}
+        {paymentProofs.length > 0 && (
+          <View style={styles.paymentProofsContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Payment Proofs</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("PaymentProofVerification")}
+              >
+                <View style={styles.pendingBadge}>
+                  {pendingProofsCount > 0 && (
+                    <View style={styles.pendingCountBadge}>
+                      <Text style={styles.pendingCountText}>
+                        {pendingProofsCount}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.seeAllText}>View All</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <GradientCard variant="surface" style={styles.proofsCard}>
+              {paymentProofs.map((proof, index) => (
+                <TouchableOpacity
+                  key={proof.id}
+                  style={[
+                    styles.proofItem,
+                    index === paymentProofs.length - 1 && styles.proofItemLast,
+                  ]}
+                  onPress={() =>
+                    navigation.navigate("PaymentProofVerification")
+                  }
+                >
+                  {/* Proof Thumbnail */}
+                  <View style={styles.proofImageContainer}>
+                    {proof.payment_proof_image_url && (
+                      <Image
+                        source={{ uri: proof.payment_proof_image_url }}
+                        style={styles.proofThumbnail}
+                        resizeMode="cover"
+                      />
+                    )}
+                  </View>
+
+                  {/* Proof Details */}
+                  <View style={styles.proofInfo}>
+                    <View style={styles.proofHeader}>
+                      <Text style={styles.proofAmount}>
+                        {formatCurrency(proof.amount)}
+                      </Text>
+                      <View
+                        style={[
+                          styles.proofStatusBadge,
+                          {
+                            backgroundColor:
+                              getProofStatusColor(proof.verification_status) +
+                              "20",
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={getProofStatusIcon(proof.verification_status)}
+                          size={14}
+                          color={getProofStatusColor(
+                            proof.verification_status
+                          )}
+                        />
+                        <Text
+                          style={[
+                            styles.proofStatusText,
+                            {
+                              color: getProofStatusColor(
+                                proof.verification_status
+                              ),
+                            },
+                          ]}
+                        >
+                          {getProofStatusText(proof.verification_status)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.proofTenant} numberOfLines={1}>
+                      {proof.tenant_name || "Tenant"}
+                    </Text>
+                    <View style={styles.proofMeta}>
+                      <Text style={styles.proofUnit} numberOfLines={1}>
+                        Unit: {proof.unit_number}
+                      </Text>
+                      <Text style={styles.proofDate}>
+                        {formatDate(proof.uploaded_at)}
+                      </Text>
+                    </View>
+                    {proof.description && (
+                      <Text style={styles.proofDescription} numberOfLines={1}>
+                        {proof.description}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Arrow Icon */}
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              ))}
+
+              {/* Pending Proofs Alert */}
+              {pendingProofsCount > 0 && (
+                <TouchableOpacity
+                  style={styles.pendingProofsAlert}
+                  onPress={() =>
+                    navigation.navigate("PaymentProofVerification")
+                  }
+                >
+                  <Ionicons
+                    name="alert-circle"
+                    size={20}
+                    color={colors.warning}
+                  />
+                  <Text style={styles.pendingProofsText}>
+                    {pendingProofsCount} proof{pendingProofsCount > 1 ? "s" : ""}{" "}
+                    awaiting verification
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.warning}
+                  />
+                </TouchableOpacity>
+              )}
+            </GradientCard>
+          </View>
+        )}
 
         {/* Recent Payments */}
         <View style={styles.recentPaymentsContainer}>
@@ -819,6 +1061,127 @@ const styles = StyleSheet.create({
     ...typography.body2,
     color: colors.text,
     marginLeft: spacing.sm,
+  },
+  // Payment Proof Styles
+  paymentProofsContainer: {
+    marginBottom: spacing.xl,
+  },
+  proofsCard: {
+    padding: spacing.md,
+  },
+  proofItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  proofItemLast: {
+    borderBottomWidth: 0,
+  },
+  proofImageContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: colors.surface,
+    marginRight: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  proofThumbnail: {
+    width: "100%",
+    height: "100%",
+  },
+  proofInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  proofHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  proofAmount: {
+    ...typography.h6,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  proofStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  proofStatusText: {
+    ...typography.caption,
+    fontWeight: "600",
+    fontSize: 11,
+  },
+  proofTenant: {
+    ...typography.body2,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  proofMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  proofUnit: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  proofDate: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  proofDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    marginTop: spacing.xs,
+  },
+  pendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  pendingCountBadge: {
+    backgroundColor: colors.warning,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  pendingCountText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 11,
+  },
+  pendingProofsAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    gap: spacing.sm,
+  },
+  pendingProofsText: {
+    ...typography.body2,
+    color: colors.warning,
+    fontWeight: "600",
+    flex: 1,
   },
 });
 

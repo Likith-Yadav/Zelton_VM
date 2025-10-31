@@ -459,6 +459,84 @@ class PaymentProof(models.Model):
         return f"Proof for Payment {self.payment.id}"
 
 
+class ManualPaymentProof(models.Model):
+    """
+    Model for manual payment proof uploads by tenants for owner verification
+    """
+    VERIFICATION_STATUS = [
+        ('pending', 'Pending Verification'),
+        ('verified', 'Verified'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='manual_payment_proofs')
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='manual_payment_proofs')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Amount paid according to the proof")
+    payment_proof_image = models.ImageField(upload_to='manual_payment_proofs/', help_text="Upload payment receipt/screenshot")
+    description = models.TextField(blank=True, help_text="Additional notes about the payment")
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS, default='pending')
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_payment_proofs')
+    verification_notes = models.TextField(blank=True, help_text="Owner's notes about verification")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = "Manual Payment Proof"
+        verbose_name_plural = "Manual Payment Proofs"
+    
+    def __str__(self):
+        return f"Payment Proof {self.id} - {self.tenant.user.email} - ₹{self.amount} - {self.verification_status}"
+    
+    @property
+    def owner(self):
+        """Get the owner of the unit for this payment proof"""
+        return self.unit.property.owner
+    
+    @property
+    def is_pending(self):
+        """Check if verification is pending"""
+        return self.verification_status == 'pending'
+    
+    @property
+    def is_verified(self):
+        """Check if verification is completed"""
+        return self.verification_status == 'verified'
+    
+    @property
+    def is_rejected(self):
+        """Check if verification is rejected"""
+        return self.verification_status == 'rejected'
+    
+    def verify_payment(self, verified_by, notes=""):
+        """Mark payment as verified"""
+        self.verification_status = 'verified'
+        self.verified_by = verified_by
+        self.verification_notes = notes
+        self.verified_at = timezone.now()
+        self.save()
+        
+        # Create a completed payment record
+        Payment.objects.create(
+            tenant=self.tenant,
+            unit=self.unit,
+            amount=self.amount,
+            payment_type='rent',
+            status='completed',
+            payment_date=self.verified_at,
+            due_date=self.verified_at.date()
+        )
+    
+    def reject_payment(self, rejected_by, notes=""):
+        """Mark payment as rejected"""
+        self.verification_status = 'rejected'
+        self.verified_by = rejected_by
+        self.verification_notes = notes
+        self.verified_at = timezone.now()
+        self.save()
+
+
 class PricingPlan(models.Model):
     name = models.CharField(max_length=100)
     min_units = models.IntegerField()
@@ -773,6 +851,51 @@ class OwnerPayment(models.Model):
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to migrate old subscription payments: {str(e)}")
             return 0
+
+
+class OwnerPayout(models.Model):
+    """Track automatic payouts to property owners from tenant rent payments"""
+    PAYOUT_STATUS = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('retry_scheduled', 'Retry Scheduled'),
+    ]
+    
+    payment = models.OneToOneField('Payment', on_delete=models.CASCADE, related_name='owner_payout')
+    owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='received_payouts')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=PAYOUT_STATUS, default='pending')
+    beneficiary_type = models.CharField(max_length=10)  # 'bank' or 'upi'
+    
+    # Cashfree specific fields
+    cashfree_transfer_id = models.CharField(max_length=100, blank=True)
+    cashfree_reference_id = models.CharField(max_length=100, blank=True)
+    cashfree_utr = models.CharField(max_length=100, blank=True)
+    cashfree_response = models.JSONField(default=dict, blank=True)
+    
+    # Retry tracking
+    retry_count = models.IntegerField(default=0)
+    max_retries = models.IntegerField(default=3)
+    last_retry_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    initiated_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-initiated_at']
+        indexes = [
+            models.Index(fields=['owner', 'status']),
+            models.Index(fields=['cashfree_transfer_id']),
+            models.Index(fields=['status', 'next_retry_at']),
+        ]
+    
+    def __str__(self):
+        return f"Payout {self.id} - {self.owner.user.email} - ₹{self.amount} ({self.status})"
 
 
 # Signal handlers to update property unit counts

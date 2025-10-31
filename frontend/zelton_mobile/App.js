@@ -32,6 +32,8 @@ import OwnerTenantDocumentsScreen from "./src/screens/OwnerTenantDocumentsScreen
 import OTPVerificationScreen from "./src/screens/OTPVerificationScreen";
 import ForgotPasswordScreen from "./src/screens/ForgotPasswordScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
+import PaymentProofUploadScreen from "./src/screens/PaymentProofUploadScreen";
+import PaymentProofVerificationScreen from "./src/screens/PaymentProofVerificationScreen";
 
 // Import theme
 import { theme } from "./src/theme/theme";
@@ -202,6 +204,8 @@ export default function App() {
           <Stack.Screen name="TenantKeyJoin" component={TenantKeyJoinScreen} />
           <Stack.Screen name="Payment" component={PaymentScreen} />
           <Stack.Screen name="TenantPayment" component={TenantPaymentScreen} />
+          <Stack.Screen name="PaymentProofUpload" component={PaymentProofUploadScreen} />
+          <Stack.Screen name="PaymentProofVerification" component={PaymentProofVerificationScreen} />
           <Stack.Screen
             name="PaymentTransactions"
             component={PaymentTransactionsScreen}

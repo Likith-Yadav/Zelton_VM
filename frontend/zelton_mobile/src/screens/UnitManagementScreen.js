@@ -153,6 +153,14 @@ const UnitManagementScreen = ({ navigation, route }) => {
   };
 
   const handleAddUnit = () => {
+    // Check if subscription limit is reached
+    if (limitWarning && !limitWarning.can_add_unit) {
+      // Show upgrade modal instead of opening add unit form
+      setUpgradeDetails(limitWarning);
+      setShowUpgradeModal(true);
+      return;
+    }
+    
     setEditingUnit(null);
     setFormData({
       unit_number: "",
@@ -175,7 +183,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
     // Navigate to pricing/subscription screen with upgrade context
     navigation.navigate('Pricing', {
       isUpgrade: true,
-      currentPlan: upgradeDetails.subscription_plan,
+      currentPlan: typeof upgradeDetails.subscription_plan === 'object' 
+        ? upgradeDetails.subscription_plan?.name 
+        : upgradeDetails.subscription_plan,
       suggestedPlan: upgradeDetails.suggested_plan
     });
   };
@@ -1321,7 +1331,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
                   Current Units: {upgradeDetails.current_units} / {upgradeDetails.max_units_allowed}
                 </Text>
                 <Text style={styles.limitText}>
-                  Current Plan: {upgradeDetails.subscription_plan}
+                  Current Plan: {typeof upgradeDetails.subscription_plan === 'object' 
+                    ? upgradeDetails.subscription_plan?.name 
+                    : upgradeDetails.subscription_plan}
                 </Text>
               </View>
               

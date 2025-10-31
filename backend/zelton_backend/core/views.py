@@ -23,15 +23,16 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice,
-    PaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    OwnerSubscriptionPayment, TenantDocument, OwnerPayment
+    PaymentProof, ManualPaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
+    OwnerSubscriptionPayment, TenantDocument, OwnerPayment, OwnerPayout
 )
 from .serializers import (
     OwnerSerializer, PropertySerializer, UnitSerializer, TenantSerializer,
     TenantKeySerializer, PaymentSerializer, InvoiceSerializer, PaymentProofSerializer,
+    ManualPaymentProofSerializer, ManualPaymentProofCreateSerializer, ManualPaymentProofVerificationSerializer,
     PricingPlanSerializer, PaymentTransactionSerializer, OwnerDashboardSerializer,
     TenantDashboardSerializer, OwnerSubscriptionPaymentSerializer, OwnerPaymentSerializer,
-    PaymentInitiationResponseSerializer, TenantDocumentSerializer
+    PaymentInitiationResponseSerializer, TenantDocumentSerializer, OwnerPayoutSerializer
 )
 from .services.phonepe_service import PhonePeService
 from .payment_utils import create_owner_payment_record, handle_legacy_payment, get_owner_payment_history
@@ -351,6 +352,31 @@ class PropertyViewSet(viewsets.ModelViewSet):
         try:
             unit = Unit.objects.get(id=unit_id, property=property_obj)
             print("Unit found:", unit)
+            
+            # CRITICAL VALIDATION: Check if owner has payment details configured
+            owner = property_obj.owner
+            if not owner.payment_method:
+                return Response({
+                    'success': False,
+                    'error': 'Owner payment details not configured',
+                    'message': 'Property owner must configure bank/UPI details before generating tenant keys. Please contact property owner.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate completeness based on payment method
+            if owner.payment_method == 'bank':
+                if not all([owner.bank_name, owner.ifsc_code, owner.account_number]):
+                    return Response({
+                        'success': False,
+                        'error': 'Owner bank details incomplete',
+                        'message': 'Property owner has incomplete bank details. Please contact property owner.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            elif owner.payment_method == 'upi':
+                if not owner.upi_id:
+                    return Response({
+                        'success': False,
+                        'error': 'Owner UPI ID not configured',
+                        'message': 'Property owner must configure UPI ID. Please contact property owner.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
             
             # Check if unit already has an active tenant
             active_tenant_key = TenantKey.objects.filter(unit=unit, is_used=True).first()
@@ -2752,6 +2778,81 @@ class PricingPlanViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'Invalid property count'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
+class OwnerPayoutViewSet(viewsets.ModelViewSet):
+    """Admin dashboard for monitoring and managing payouts"""
+    queryset = OwnerPayout.objects.all()
+    serializer_class = OwnerPayoutSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Admin can see all
+        if user.is_staff or user.is_superuser:
+            return OwnerPayout.objects.all().select_related('owner__user', 'payment__unit__property')
+        
+        # Owner can only see their own
+        try:
+            owner = Owner.objects.get(user=user)
+            return OwnerPayout.objects.filter(owner=owner)
+        except Owner.DoesNotExist:
+            return OwnerPayout.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        """Get payout statistics for admin dashboard"""
+        from django.db.models import Sum, Count
+        
+        stats = {
+            'total_payouts': OwnerPayout.objects.count(),
+            'completed': OwnerPayout.objects.filter(status='completed').count(),
+            'processing': OwnerPayout.objects.filter(status__in=['pending', 'processing']).count(),
+            'failed': OwnerPayout.objects.filter(status='failed').count(),
+            'retry_scheduled': OwnerPayout.objects.filter(status='retry_scheduled').count(),
+            'total_amount': OwnerPayout.objects.filter(status='completed').aggregate(
+                total=Sum('amount'))['total'] or 0,
+        }
+        
+        return Response(stats)
+    
+    @action(detail=True, methods=['post'])
+    def manual_retry(self, request, pk=None):
+        """Manually retry a failed payout"""
+        from core.services.cashfree_payout_service import CashfreePayoutService
+        
+        result = CashfreePayoutService.retry_failed_payout(pk)
+        
+        if result['success']:
+            return Response({
+                'success': True,
+                'message': 'Payout retry initiated'
+            })
+        else:
+            return Response({
+                'success': False,
+                'error': result['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def check_status(self, request, pk=None):
+        """Check current status with Cashfree"""
+        from core.services.cashfree_payout_service import CashfreePayoutService
+        
+        result = CashfreePayoutService.check_payout_status(pk)
+        
+        if result['success']:
+            payout = self.get_object()
+            return Response({
+                'success': True,
+                'status': payout.status,
+                'message': f'Status updated to {payout.status}'
+            })
+        else:
+            return Response({
+                'success': False,
+                'error': result['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -2827,18 +2928,23 @@ class TenantDocumentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=False, methods=['get'], url_path='download/(?P<document_id>[^/.]+)/')
+    @action(detail=False, methods=['get'], url_path=r'download/(?P<document_id>\d+)')
     def download_document(self, request, document_id=None):
         """Download a specific tenant document (owner access)"""
         try:
             if hasattr(request.user, 'owner_profile'):
                 owner = request.user.owner_profile
                 
+                print(f"Owner download - Looking for document ID: {document_id}")
+                print(f"Owner: {owner}")
+                
                 # Verify the document belongs to a unit owned by this owner
                 document = TenantDocument.objects.filter(
                     id=document_id,
                     unit__property__owner=owner
                 ).first()
+
+                print(f"Owner download - Document found: {document}")
 
                 if not document:
                     return Response({'error': 'Document not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
@@ -2852,6 +2958,11 @@ class TenantDocumentViewSet(viewsets.ModelViewSet):
                 base_url = getattr(settings, 'BASE_URL', 'https://api.zelton.in')
                 document_url = f"{base_url}{document.document_file.url}"
                 
+                # Debug logging
+                print(f"Owner download - Document file URL: {document.document_file.url}")
+                print(f"Owner download - Constructed URL: {document_url}")
+                print(f"Owner download - File exists: {document.document_file.storage.exists(document.document_file.name)}")
+                
                 # Get file name and size, with fallbacks
                 file_name = document.file_name or document.document_file.name.split('/')[-1] if document.document_file else 'unknown'
                 file_size = document.file_size or (document.document_file.size if document.document_file else 0)
@@ -2862,10 +2973,250 @@ class TenantDocumentViewSet(viewsets.ModelViewSet):
                     'file_name': file_name,
                     'file_size': file_size,
                     'tenant_name': document.tenant.user.get_full_name(),
-                    'unit_number': document.unit.unit_number
+                    'unit_number': document.unit.unit_number,
+                    'debug_info': {
+                        'relative_url': document.document_file.url,
+                        'absolute_url': document_url,
+                        'file_exists': document.document_file.storage.exists(document.document_file.name),
+                        'model_file_name': document.file_name,
+                        'model_file_size': document.file_size,
+                        'actual_file_name': document.document_file.name if document.document_file else None,
+                        'actual_file_size': document.document_file.size if document.document_file else None
+                    }
                 })
 
             return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
 
         except Exception as e:
+            print(f"Owner download error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ManualPaymentProofViewSet(viewsets.ModelViewSet):
+    '''
+    ViewSet for managing manual payment proof uploads and verifications
+    '''
+    queryset = ManualPaymentProof.objects.all()
+    serializer_class = ManualPaymentProofSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        '''Filter queryset based on user role'''
+        user = self.request.user
+        
+        if hasattr(user, 'tenant_profile'):
+            # Tenant can only see their own payment proofs
+            return ManualPaymentProof.objects.filter(tenant=user.tenant_profile)
+        elif hasattr(user, 'owner_profile'):
+            # Owner can see payment proofs for their units
+            return ManualPaymentProof.objects.filter(unit__property__owner=user.owner_profile)
+        else:
+            return ManualPaymentProof.objects.none()
+
+    def get_serializer_class(self):
+        '''Return appropriate serializer based on action'''
+        if self.action == 'create':
+            return ManualPaymentProofCreateSerializer
+        elif self.action == 'verify':
+            return ManualPaymentProofVerificationSerializer
+        return ManualPaymentProofSerializer
+
+    def get_serializer_context(self):
+        '''Add request to serializer context'''
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def create(self, request, *args, **kwargs):
+        '''Create a new manual payment proof (tenant upload)'''
+        try:
+            print(f"Payment proof upload request data: {request.data}")
+            print(f"Payment proof upload files: {request.FILES}")
+            print(f"User: {request.user}")
+            print(f"Request method: {request.method}")
+            print(f"Content type: {request.content_type}")
+            
+            # Ensure user is a tenant
+            if not hasattr(request.user, 'tenant_profile'):
+                return Response(
+                    {'error': 'Only tenants can upload payment proofs'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            tenant = request.user.tenant_profile
+            print(f"Tenant: {tenant}")
+            
+            # Validate that the unit belongs to the tenant
+            unit_id = request.data.get('unit')
+            print(f"Unit ID from request: {unit_id}")
+            
+            tenant_key = TenantKey.objects.filter(tenant=tenant, unit_id=unit_id, is_used=True).first()
+            print(f"Tenant key found: {tenant_key}")
+            
+            if not tenant_key:
+                return Response(
+                    {'error': 'You are not assigned to this unit'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate required fields (same pattern as tenant document upload)
+            unit_id = request.data.get('unit')
+            amount = request.data.get('amount')
+            description = request.data.get('description', '')
+            
+            if not unit_id:
+                return Response({'error': 'Unit is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not amount:
+                return Response({'error': 'Amount is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if 'payment_proof_image' not in request.FILES:
+                return Response({'error': 'Payment proof image is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get the unit
+            unit = tenant_key.unit
+            
+            # Create payment proof directly (same pattern as tenant document upload)
+            payment_proof_image = request.FILES['payment_proof_image']
+            payment_proof = ManualPaymentProof.objects.create(
+                tenant=tenant,
+                unit=unit,
+                amount=amount,
+                payment_proof_image=payment_proof_image,
+                description=description,
+                verification_status='pending'
+            )
+            print(f"Payment proof created: {payment_proof}")
+            
+            return Response({
+                'success': True,
+                'message': 'Payment proof uploaded successfully',
+                'payment_proof': ManualPaymentProofSerializer(payment_proof, context={'request': request}).data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            print(f"Payment proof upload error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def verify(self, request, pk=None):
+        '''Verify a payment proof (owner action)'''
+        try:
+            # Ensure user is an owner
+            if not hasattr(request.user, 'owner_profile'):
+                return Response(
+                    {'error': 'Only owners can verify payment proofs'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            owner = request.user.owner_profile
+            payment_proof = self.get_object()
+
+            # Ensure the payment proof belongs to the owner's unit
+            if payment_proof.unit.property.owner != owner:
+                return Response(
+                    {'error': 'You can only verify payment proofs for your own units'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Ensure payment proof is pending
+            if payment_proof.verification_status != 'pending':
+                return Response(
+                    {'error': 'Payment proof has already been processed'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer = self.get_serializer(payment_proof, data=request.data, partial=True)
+            if serializer.is_valid():
+                verification_status = serializer.validated_data.get('verification_status')
+                verification_notes = serializer.validated_data.get('verification_notes', '')
+
+                if verification_status == 'verified':
+                    payment_proof.verify_payment(request.user, verification_notes)
+                    message = 'Payment proof verified successfully. Payment record created.'
+                elif verification_status == 'rejected':
+                    payment_proof.reject_payment(request.user, verification_notes)
+                    message = 'Payment proof rejected.'
+                else:
+                    return Response(
+                        {'error': 'Invalid verification status'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                return Response({
+                    'success': True,
+                    'message': message,
+                    'payment_proof': ManualPaymentProofSerializer(payment_proof, context={'request': request}).data
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        '''Get all pending payment proofs for the owner'''
+        try:
+            if not hasattr(request.user, 'owner_profile'):
+                return Response(
+                    {'error': 'Only owners can view pending payment proofs'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            owner = request.user.owner_profile
+            pending_proofs = ManualPaymentProof.objects.filter(
+                unit__property__owner=owner,
+                verification_status='pending'
+            ).order_by('-uploaded_at')
+
+            serializer = self.get_serializer(pending_proofs, many=True)
+            return Response({
+                'success': True,
+                'pending_payment_proofs': serializer.data,
+                'count': pending_proofs.count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def my_proofs(self, request):
+        '''Get all payment proofs uploaded by the tenant'''
+        try:
+            if not hasattr(request.user, 'tenant_profile'):
+                return Response(
+                    {'error': 'Only tenants can view their payment proofs'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            tenant = request.user.tenant_profile
+            tenant_proofs = ManualPaymentProof.objects.filter(
+                tenant=tenant
+            ).order_by('-uploaded_at')
+
+            serializer = self.get_serializer(tenant_proofs, many=True)
+            return Response({
+                'success': True,
+                'my_payment_proofs': serializer.data,
+                'count': tenant_proofs.count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

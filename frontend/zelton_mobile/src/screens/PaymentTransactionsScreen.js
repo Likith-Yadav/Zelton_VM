@@ -120,7 +120,7 @@ const PaymentTransactionsScreen = ({ navigation }) => {
             {payment.property_name} - Unit {payment.unit_number}
           </Text>
           <Text style={styles.paymentDate}>
-            {formatDate(payment.payment_date)}
+            {formatDate(payment.payment_date || payment.created_at || payment.updated_at)}
           </Text>
         </View>
         <View style={styles.paymentStatus}>

@@ -668,13 +668,31 @@ const TenantPaymentScreen = ({ navigation, route }) => {
           </View>
         </GradientCard>
 
-        {/* Pay Button */}
-        <GradientButton
-          title={`Pay ${formatCurrency(getPaymentAmount())}`}
-          onPress={handlePayment}
-          style={styles.payButton}
-          disabled={getPaymentAmount() <= 0}
-        />
+        {/* Payment Options */}
+        <View style={styles.paymentOptionsContainer}>
+          <GradientButton
+            title={`Pay ${formatCurrency(getPaymentAmount())}`}
+            onPress={handlePayment}
+            style={styles.payButton}
+            disabled={getPaymentAmount() <= 0}
+          />
+          
+          <TouchableOpacity
+            style={styles.manualPaymentButton}
+            onPress={() => navigation.navigate("PaymentProofUpload")}
+          >
+            <View style={styles.manualPaymentContent}>
+              <Ionicons name="camera" size={24} color={colors.primary} />
+              <View style={styles.manualPaymentText}>
+                <Text style={styles.manualPaymentTitle}>Upload Payment Proof</Text>
+                <Text style={styles.manualPaymentSubtitle}>
+                  Upload receipt or screenshot for manual verification
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
  
       {renderPaymentModal()}
@@ -836,8 +854,37 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "500",
   },
-  payButton: {
+  paymentOptionsContainer: {
     marginBottom: spacing.xl,
+  },
+  payButton: {
+    marginBottom: spacing.md,
+  },
+  manualPaymentButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...shadows.sm,
+  },
+  manualPaymentContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  manualPaymentText: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  manualPaymentTitle: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: "600",
+    marginBottom: spacing.xs,
+  },
+  manualPaymentSubtitle: {
+    ...typography.body2,
+    color: colors.textSecondary,
   },
   // Modal styles
   modalOverlay: {

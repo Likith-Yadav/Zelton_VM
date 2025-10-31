@@ -1,0 +1,24 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting cashfree-payout
+  Using cached cashfree_payout-0.0.13-py3-none-any.whl.metadata (2.0 kB)
+Requirement already satisfied: urllib3<2.1.0,>=1.25.3 in /home/zelton/.local/lib/python3.12/site-packages (from cashfree-payout) (1.26.12)
+Requirement already satisfied: python-dateutil in /usr/lib/python3.12/site-packages (from cashfree-payout) (2.9.0.post0)
+Requirement already satisfied: sentry-sdk<1.33.0,>=1.32.0 in /home/zelton/.local/lib/python3.12/site-packages (from cashfree-payout) (1.32.0)
+Collecting pydantic<2,>=1.10.5 (from cashfree-payout)
+  Downloading pydantic-1.10.24-py3-none-any.whl.metadata (154 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 154.8/154.8 kB 1.1 MB/s eta 0:00:00
+
+Collecting aenum (from cashfree-payout)
+  Downloading aenum-3.1.16-py3-none-any.whl.metadata (3.8 kB)
+Requirement already satisfied: typing-extensions>=4.2.0 in /home/zelton/.local/lib/python3.12/site-packages (from pydantic<2,>=1.10.5->cashfree-payout) (4.15.0)
+Requirement already satisfied: certifi in /home/zelton/.local/lib/python3.12/site-packages (from sentry-sdk<1.33.0,>=1.32.0->cashfree-payout) (2025.10.5)
+Requirement already satisfied: six>=1.5 in /usr/lib/python3.12/site-packages (from python-dateutil->cashfree-payout) (1.16.0)
+Using cached cashfree_payout-0.0.13-py3-none-any.whl (56 kB)
+Downloading pydantic-1.10.24-py3-none-any.whl (166 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 166.7/166.7 kB 4.4 MB/s eta 0:00:00
+
+Downloading aenum-3.1.16-py3-none-any.whl (165 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 165.6/165.6 kB 6.3 MB/s eta 0:00:00
+
+Installing collected packages: aenum, pydantic, cashfree-payout
+Successfully installed aenum-3.1.16 cashfree-payout-0.0.13 pydantic-1.10.24
