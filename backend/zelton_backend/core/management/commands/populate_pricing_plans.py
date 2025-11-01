@@ -14,13 +14,14 @@ class Command(BaseCommand):
         # Define pricing plans based on units (not properties)
         pricing_plans = [
             {
-                'name': 'Starter Plan',
+                'name': '1-20 Houses',
                 'min_units': 1,
                 'max_units': 20,
                 'monthly_price': Decimal('2000.00'),
                 'yearly_price': Decimal('22000.00'),
                 'features': [
-                    'Up to 20 units',
+                    'Up to 20 houses',
+                    'Perfect for small to medium property owners',
                     'Basic property management',
                     'Tenant management',
                     'Payment tracking',
@@ -28,13 +29,14 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Growth Plan',
+                'name': '21-40 Houses',
                 'min_units': 21,
                 'max_units': 40,
                 'monthly_price': Decimal('4000.00'),
                 'yearly_price': Decimal('44000.00'),
                 'features': [
-                    'Up to 40 units',
+                    'Up to 40 houses',
+                    'For growing property businesses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -43,13 +45,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Business Plan',
+                'name': '41-60 Houses',
                 'min_units': 41,
                 'max_units': 60,
                 'monthly_price': Decimal('6000.00'),
                 'yearly_price': Decimal('66000.00'),
                 'features': [
-                    'Up to 60 units',
+                    'Up to 60 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -59,13 +61,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Enterprise Plan',
+                'name': '61-80 Houses',
                 'min_units': 61,
                 'max_units': 80,
                 'monthly_price': Decimal('8000.00'),
                 'yearly_price': Decimal('88000.00'),
                 'features': [
-                    'Up to 80 units',
+                    'Up to 80 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -76,13 +78,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Professional Plan',
+                'name': '81-100 Houses',
                 'min_units': 81,
                 'max_units': 100,
                 'monthly_price': Decimal('10000.00'),
                 'yearly_price': Decimal('110000.00'),
                 'features': [
-                    'Up to 100 units',
+                    'Up to 100 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -94,13 +96,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Premium Plan',
+                'name': '101-120 Houses',
                 'min_units': 101,
                 'max_units': 120,
                 'monthly_price': Decimal('12000.00'),
                 'yearly_price': Decimal('132000.00'),
                 'features': [
-                    'Up to 120 units',
+                    'Up to 120 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -113,13 +115,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': 'Ultimate Plan',
+                'name': '121+ Houses',
                 'min_units': 121,
                 'max_units': 999999,  # Unlimited
                 'monthly_price': Decimal('14000.00'),
                 'yearly_price': Decimal('154000.00'),
                 'features': [
-                    'Unlimited units',
+                    'Unlimited houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',

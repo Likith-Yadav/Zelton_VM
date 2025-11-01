@@ -5,7 +5,7 @@ import re
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice, 
     PaymentProof, ManualPaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    OwnerSubscriptionPayment, TenantDocument, OwnerPayment, OwnerPayout
+    TenantDocument, OwnerPayment, OwnerPayout
 )
 
 
@@ -410,22 +410,6 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
             'id', 'merchant_order_id', 'phonepe_transaction_id', 'phonepe_payment_id', 'phonepe_order_id',
             'amount', 'currency', 'status', 'payment_method', 'payment_gateway_response',
             'payment_attempt_count', 'reconciliation_status', 'user', 'payment', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class OwnerSubscriptionPaymentSerializer(serializers.ModelSerializer):
-    owner_name = serializers.CharField(source='owner.user.get_full_name', read_only=True)
-    pricing_plan_name = serializers.CharField(source='pricing_plan.name', read_only=True)
-    
-    class Meta:
-        model = OwnerSubscriptionPayment
-        fields = [
-            'id', 'owner', 'owner_name', 'pricing_plan', 'pricing_plan_name',
-            'amount', 'payment_type', 'status', 'payment_date', 'due_date',
-            'subscription_period', 'subscription_start_date', 'subscription_end_date',
-            'merchant_order_id', 'phonepe_order_id', 'phonepe_transaction_id',
-            'payment_gateway_response', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

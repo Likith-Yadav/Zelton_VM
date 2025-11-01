@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 from .models import (
     Owner, Property, Unit, Tenant, TenantKey, Payment, Invoice,
     PaymentProof, ManualPaymentProof, PricingPlan, PaymentTransaction, PropertyImage, UnitImage,
-    OwnerSubscriptionPayment, TenantDocument, OwnerPayment, OwnerPayout
+    TenantDocument, OwnerPayment, OwnerPayout
 )
 from .serializers import (
     OwnerSerializer, PropertySerializer, UnitSerializer, TenantSerializer,
     TenantKeySerializer, PaymentSerializer, InvoiceSerializer, PaymentProofSerializer,
     ManualPaymentProofSerializer, ManualPaymentProofCreateSerializer, ManualPaymentProofVerificationSerializer,
     PricingPlanSerializer, PaymentTransactionSerializer, OwnerDashboardSerializer,
-    TenantDashboardSerializer, OwnerSubscriptionPaymentSerializer, OwnerPaymentSerializer,
+    TenantDashboardSerializer, OwnerPaymentSerializer,
     PaymentInitiationResponseSerializer, TenantDocumentSerializer, OwnerPayoutSerializer
 )
 from .services.phonepe_service import PhonePeService
@@ -2041,15 +2041,15 @@ class AnalyticsViewSet(viewsets.ViewSet):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
-    queryset = OwnerSubscriptionPayment.objects.all()
-    serializer_class = OwnerSubscriptionPaymentSerializer
+    queryset = OwnerPayment.objects.filter(payment_type__in=['subscription', 'upgrade', 'renewal'])
+    serializer_class = OwnerPaymentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         owner = Owner.objects.filter(user=self.request.user).first()
         if owner:
-            return OwnerSubscriptionPayment.objects.filter(owner=owner)
-        return OwnerSubscriptionPayment.objects.none()
+            return OwnerPayment.objects.filter(owner=owner, payment_type__in=['subscription', 'upgrade', 'renewal'])
+        return OwnerPayment.objects.none()
 
     @action(detail=False, methods=['post'])
     def initiate_upgrade(self, request):
@@ -2111,17 +2111,6 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 status='pending',
                 due_date=due_date,
                 description=f"Plan upgrade to {pricing_plan.name} ({period})"
-            )
-            
-            # Also create the old model record for backward compatibility
-            old_subscription_payment = OwnerSubscriptionPayment.objects.create(
-                owner=owner,
-                pricing_plan=pricing_plan,
-                amount=total_amount,
-                payment_type='upgrade',
-                status='pending',
-                due_date=due_date,
-                subscription_period=period
             )
             
             # Initiate PhonePe payment
@@ -2234,17 +2223,6 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 description=f"New subscription to {pricing_plan.name} ({period})"
             )
             
-            # Also create the old model record for backward compatibility
-            old_subscription_payment = OwnerSubscriptionPayment.objects.create(
-                owner=owner,
-                pricing_plan=pricing_plan,
-                amount=total_amount,
-                payment_type='subscription',
-                status='pending',
-                due_date=due_date,
-                subscription_period=period
-            )
-            
             # Initiate PhonePe payment
             phonepe_response = PhonePeService.initiate_owner_subscription_payment(owner, pricing_plan, period)
             
@@ -2291,14 +2269,12 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # Find subscription payment record
-            subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             owner_payment = OwnerPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             
-            if not subscription_payment and not owner_payment:
+            if not owner_payment:
                 return Response({'error': 'Subscription payment not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Use the payment record that exists
-            payment_record = owner_payment if owner_payment else subscription_payment
+            payment_record = owner_payment
             
             # Update payment status based on PhonePe response
             state = phonepe_response['state']
@@ -2306,11 +2282,8 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 PhonePeService.handle_payment_completed(merchant_order_id)
                 payment_record.refresh_from_db()
                 
-                # Return appropriate serializer data based on payment type
-                if owner_payment:
-                    payment_data = OwnerPaymentSerializer(payment_record).data
-                else:
-                    payment_data = OwnerSubscriptionPaymentSerializer(payment_record).data
+                # Return appropriate serializer data
+                payment_data = OwnerPaymentSerializer(payment_record).data
                 
                 return Response({
                     'success': True,
@@ -2323,11 +2296,8 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 PhonePeService.handle_payment_failed(merchant_order_id)
                 payment_record.refresh_from_db()
                 
-                # Return appropriate serializer data based on payment type
-                if owner_payment:
-                    payment_data = OwnerPaymentSerializer(payment_record).data
-                else:
-                    payment_data = OwnerSubscriptionPaymentSerializer(payment_record).data
+                # Return appropriate serializer data
+                payment_data = OwnerPaymentSerializer(payment_record).data
                 
                 return Response({
                     'success': False,
@@ -2337,11 +2307,8 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             elif state == 'PENDING':
-                # Return appropriate serializer data based on payment type
-                if owner_payment:
-                    payment_data = OwnerPaymentSerializer(payment_record).data
-                else:
-                    payment_data = OwnerSubscriptionPaymentSerializer(payment_record).data
+                # Return appropriate serializer data
+                payment_data = OwnerPaymentSerializer(payment_record).data
                 
                 return Response({
                     'success': True,
@@ -2370,14 +2337,12 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Order ID is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Find subscription payment by PhonePe order ID
-            subscription_payment = OwnerSubscriptionPayment.objects.filter(phonepe_order_id=order_id).first()
             owner_payment = OwnerPayment.objects.filter(phonepe_order_id=order_id).first()
             
-            if not subscription_payment and not owner_payment:
+            if not owner_payment:
                 return Response({'error': 'Subscription payment not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Use the payment record that has the merchant_order_id
-            payment_record = owner_payment if owner_payment else subscription_payment
+            payment_record = owner_payment
             
             # Verify payment status with PhonePe
             phonepe_response = PhonePeService.verify_payment_status(payment_record.merchant_order_id)
@@ -2394,11 +2359,8 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 PhonePeService.handle_payment_completed(payment_record.merchant_order_id)
                 payment_record.refresh_from_db()
                 
-                # Return appropriate serializer data based on payment type
-                if owner_payment:
-                    payment_data = OwnerPaymentSerializer(payment_record).data
-                else:
-                    payment_data = OwnerSubscriptionPaymentSerializer(payment_record).data
+                # Return appropriate serializer data
+                payment_data = OwnerPaymentSerializer(payment_record).data
                 
                 return Response({
                     'success': True,
@@ -2412,11 +2374,8 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 PhonePeService.handle_payment_failed(payment_record.merchant_order_id)
                 payment_record.refresh_from_db()
                 
-                # Return appropriate serializer data based on payment type
-                if owner_payment:
-                    payment_data = OwnerPaymentSerializer(payment_record).data
-                else:
-                    payment_data = OwnerSubscriptionPaymentSerializer(payment_record).data
+                # Return appropriate serializer data
+                payment_data = OwnerPaymentSerializer(payment_record).data
                 
                 return Response({
                     'success': False,
@@ -2431,7 +2390,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                     'success': True,
                     'message': 'Subscription payment is still processing',
                     'state': state,
-                    'subscription_payment': OwnerSubscriptionPaymentSerializer(subscription_payment).data,
+                    'subscription_payment': OwnerPaymentSerializer(owner_payment).data,
                     'redirect_url': '/subscription-pending'
                 }, status=status.HTTP_200_OK)
                 
@@ -2539,9 +2498,10 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Owner profile not found'}, status=status.HTTP_404_NOT_FOUND)
             
             # Get active subscription payment
-            active_payment = OwnerSubscriptionPayment.objects.filter(
+            active_payment = OwnerPayment.objects.filter(
                 owner=owner,
-                status='completed'
+                status='completed',
+                payment_type__in=['subscription', 'upgrade', 'renewal']
             ).order_by('-created_at').first()
             
             if not active_payment:
@@ -2558,7 +2518,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
             
             response_data = {
                 'has_active_subscription': is_active,
-                'subscription_payment': OwnerSubscriptionPaymentSerializer(active_payment).data,
+                'subscription_payment': OwnerPaymentSerializer(active_payment).data,
                 'owner_limits': {
                     'current_units': owner.calculated_total_units,
                     'max_units_allowed': owner.max_units_allowed,
@@ -2596,7 +2556,7 @@ class OwnerPaymentViewSet(viewsets.ModelViewSet):
     Handles both new and legacy payments gracefully.
     """
     queryset = OwnerPayment.objects.all()
-    serializer_class = OwnerSubscriptionPaymentSerializer  # Reuse existing serializer for now
+    serializer_class = OwnerPaymentSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
@@ -2655,7 +2615,7 @@ class OwnerPaymentViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'payments': OwnerSubscriptionPaymentSerializer(payments, many=True).data,
+                'payments': OwnerPaymentSerializer(payments, many=True).data,
                 'summary': summary
             })
             
@@ -2694,7 +2654,7 @@ class OwnerPaymentViewSet(viewsets.ModelViewSet):
             if legacy_payment:
                 return Response({
                     'success': True,
-                    'payment': OwnerSubscriptionPaymentSerializer(legacy_payment).data,
+                    'payment': OwnerPaymentSerializer(legacy_payment).data,
                     'message': 'Legacy payment created successfully'
                 })
             else:

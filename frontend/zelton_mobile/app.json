@@ -20,7 +20,14 @@
     },
     "scheme": "zeltonlivings",
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you upload payment proof receipts.",
+          "cameraPermission": "The app accesses your camera to let you take photos for payment proof."
+        }
+      ]
     ],
     "extra": {
       "eas": {
@@ -33,7 +40,10 @@
       "targetSdkVersion": 35,
       "versionCode": 2,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "privacyPolicy": "https://zelton.in/privacy-policy"
     },

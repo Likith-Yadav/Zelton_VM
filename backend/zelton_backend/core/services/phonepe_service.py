@@ -10,7 +10,7 @@ from phonepe.sdk.pg.common.models.request.meta_info import MetaInfo
 from phonepe.sdk.pg.env import Env
 from phonepe.sdk.pg.common.exceptions import PhonePeException
 
-from core.models import Payment, OwnerSubscriptionPayment, OwnerPayment, PaymentTransaction
+from core.models import Payment, OwnerPayment, PaymentTransaction
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,6 @@ class PhonePeService:
         try:
             # Find payment record
             payment = Payment.objects.filter(merchant_order_id=merchant_order_id).first()
-            subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             owner_payment = OwnerPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             
             if payment:
@@ -347,32 +346,6 @@ class PhonePeService:
                 logger.info(f"Owner payment {owner_payment.id} marked as completed")
                 return {'success': True, 'payment_type': 'owner', 'payment_id': owner_payment.id}
             
-            elif subscription_payment:
-                subscription_payment.status = 'completed'
-                subscription_payment.payment_date = timezone.now()
-                
-                # Set subscription dates
-                now = timezone.now()
-                subscription_payment.subscription_start_date = now
-                
-                if subscription_payment.subscription_period == 'yearly':
-                    subscription_payment.subscription_end_date = now + timedelta(days=365)
-                else:
-                    subscription_payment.subscription_end_date = now + timedelta(days=30)
-                
-                subscription_payment.save()
-                
-                # Update owner subscription status
-                owner = subscription_payment.owner
-                owner.subscription_status = 'active'
-                owner.subscription_plan = subscription_payment.pricing_plan  # Update to new plan
-                owner.subscription_start_date = now
-                owner.subscription_end_date = subscription_payment.subscription_end_date
-                owner.save()
-                
-                logger.info(f"Subscription payment {subscription_payment.id} marked as completed")
-                return {'success': True, 'payment_type': 'subscription', 'payment_id': subscription_payment.id}
-            
             else:
                 logger.warning(f"No payment record found for merchant_order_id: {merchant_order_id}")
                 return {'success': False, 'error': 'Payment record not found'}
@@ -387,7 +360,6 @@ class PhonePeService:
         try:
             # Find payment record
             payment = Payment.objects.filter(merchant_order_id=merchant_order_id).first()
-            subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             owner_payment = OwnerPayment.objects.filter(merchant_order_id=merchant_order_id).first()
             
             if payment:
@@ -411,13 +383,6 @@ class PhonePeService:
                 
                 logger.info(f"Owner payment {owner_payment.id} marked as failed")
                 return {'success': True, 'payment_type': 'owner', 'payment_id': owner_payment.id}
-            
-            elif subscription_payment:
-                subscription_payment.status = 'failed'
-                subscription_payment.save()
-                
-                logger.info(f"Subscription payment {subscription_payment.id} marked as failed")
-                return {'success': True, 'payment_type': 'subscription', 'payment_id': subscription_payment.id}
             
             else:
                 logger.warning(f"No payment record found for merchant_order_id: {merchant_order_id}")
@@ -468,12 +433,12 @@ class PhonePeService:
             # Find original payment to get amount if not provided
             if not amount:
                 payment = Payment.objects.filter(merchant_order_id=original_merchant_order_id).first()
-                subscription_payment = OwnerSubscriptionPayment.objects.filter(merchant_order_id=original_merchant_order_id).first()
+                owner_payment = OwnerPayment.objects.filter(merchant_order_id=original_merchant_order_id).first()
                 
                 if payment:
                     amount = payment.amount
-                elif subscription_payment:
-                    amount = subscription_payment.amount
+                elif owner_payment:
+                    amount = owner_payment.amount
                 else:
                     return {'success': False, 'error': 'Original payment not found'}
             

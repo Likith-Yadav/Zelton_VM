@@ -65,10 +65,10 @@ class AuthViewSet(viewsets.ViewSet):
             
             # Create profile based on role
             if data['role'] == 'owner':
-                # Get the default pricing plan (Starter Plan for new owners)
+                # Get the default pricing plan (1-20 Houses for new owners)
                 from core.models import PricingPlan
                 default_plan = PricingPlan.objects.filter(
-                    name='Starter Plan', 
+                    name='1-20 Houses', 
                     is_active=True
                 ).first()
                 
@@ -538,11 +538,15 @@ The ZeltonLivings Team'''
                 to_name = "User"
             
             subject = 'Verify Your Email - ZeltonLivings Account'
-            message = f'''Dear {to_name},
+            
+            # Plain text version
+            message = f"""Dear {to_name},
 
 Thank you for registering with ZeltonLivings!
 
-Your email verification code is: {verification_code}
+Your email verification code is:
+
+{verification_code}
 
 Please enter this code in the app to complete your account setup.
 
@@ -553,7 +557,26 @@ If you did not create an account with ZeltonLivings, please disregard this email
 For support, contact us at support@zeltonlivings.com
 
 Best regards,
-The ZeltonLivings Team'''
+The ZeltonLivings Team"""
+            
+            # HTML version with styled OTP
+            html_message = f'''
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <p>Dear {to_name},</p>
+                    <p>Thank you for registering with ZeltonLivings!</p>
+                    <p>Your email verification code is:</p>
+                    <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                        <span style="font-size: 56px; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; font-family: 'Arial Black', Arial, sans-serif;">{verification_code}</span>
+                    </div>
+                    <p>Please enter this code in the app to complete your account setup.</p>
+                    <p>This verification code is valid for 10 minutes.</p>
+                    <p>If you did not create an account with ZeltonLivings, please disregard this email.</p>
+                    <p>For support, contact us at support@zeltonlivings.com</p>
+                    <p>Best regards,<br>The ZeltonLivings Team</p>
+                </body>
+            </html>
+            '''
             
             send_mail(
                 subject,
@@ -561,6 +584,7 @@ The ZeltonLivings Team'''
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
                 fail_silently=False,
+                html_message=html_message,
             )
             
             print(f"OTP sent to {email}: {verification_code}")

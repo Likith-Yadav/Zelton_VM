@@ -615,45 +615,6 @@ class UnitImage(models.Model):
         return f"Image for {self.unit.property.name} - Unit {self.unit.unit_number}"
 
 
-class OwnerSubscriptionPayment(models.Model):
-    SUBSCRIPTION_STATUS = [
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('cancelled', 'Cancelled'),
-    ]
-    
-    SUBSCRIPTION_PERIOD = [
-        ('monthly', 'Monthly'),
-        ('yearly', 'Yearly'),
-    ]
-    
-    owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='subscription_payments')
-    pricing_plan = models.ForeignKey(PricingPlan, on_delete=models.CASCADE, related_name='subscription_payments')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_type = models.CharField(max_length=20, default='subscription')
-    status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS, default='pending')
-    payment_date = models.DateTimeField(null=True, blank=True)
-    due_date = models.DateField()
-    subscription_period = models.CharField(max_length=20, choices=SUBSCRIPTION_PERIOD)
-    subscription_start_date = models.DateTimeField(null=True, blank=True)
-    subscription_end_date = models.DateTimeField(null=True, blank=True)
-    merchant_order_id = models.CharField(max_length=100, unique=True, blank=True, null=True)
-    phonepe_order_id = models.CharField(max_length=100, blank=True)
-    phonepe_transaction_id = models.CharField(max_length=100, blank=True)
-    payment_gateway_response = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    def __str__(self):
-        return f"Subscription Payment {self.id} - {self.owner.user.email} - ₹{self.amount}"
-    
-    def save(self, *args, **kwargs):
-        if not self.merchant_order_id:
-            self.merchant_order_id = f"SUB_{self.owner.id}_{int(timezone.now().timestamp())}"
-        super().save(*args, **kwargs)
-
-
 class OwnerPayment(models.Model):
     """
     Comprehensive payment tracking model for all owner payments.
@@ -798,61 +759,6 @@ class OwnerPayment(models.Model):
             logger.error(f"Failed to create legacy payment for owner {owner.id}: {str(e)}")
             return None
     
-    @classmethod
-    def migrate_old_subscription_payments(cls):
-        """
-        Migrate old OwnerSubscriptionPayment records to the new OwnerPayment model.
-        This method handles the migration gracefully.
-        """
-        try:
-            from .models import OwnerSubscriptionPayment
-            
-            migrated_count = 0
-            for old_payment in OwnerSubscriptionPayment.objects.all():
-                try:
-                    # Check if already migrated
-                    if cls.objects.filter(
-                        owner=old_payment.owner,
-                        amount=old_payment.amount,
-                        payment_date=old_payment.payment_date,
-                        migrated_from='OwnerSubscriptionPayment'
-                    ).exists():
-                        continue
-                    
-                    # Create new payment record
-                    cls.objects.create(
-                        owner=old_payment.owner,
-                        pricing_plan=old_payment.pricing_plan,
-                        amount=old_payment.amount,
-                        payment_type='subscription',
-                        payment_method='phonepe',
-                        status=old_payment.status,
-                        payment_date=old_payment.payment_date,
-                        due_date=old_payment.due_date,
-                        subscription_start_date=old_payment.subscription_start_date,
-                        subscription_end_date=old_payment.subscription_end_date,
-                        merchant_order_id=old_payment.merchant_order_id,
-                        phonepe_order_id=old_payment.phonepe_order_id,
-                        phonepe_transaction_id=old_payment.phonepe_transaction_id,
-                        payment_gateway_response=old_payment.payment_gateway_response,
-                        migrated_from='OwnerSubscriptionPayment',
-                        description=f"Migrated from OwnerSubscriptionPayment ID: {old_payment.id}"
-                    )
-                    migrated_count += 1
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to migrate payment {old_payment.id}: {str(e)}")
-                    continue
-            
-            return migrated_count
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to migrate old subscription payments: {str(e)}")
-            return 0
-
-
 class OwnerPayout(models.Model):
     """Track automatic payouts to property owners from tenant rent payments"""
     PAYOUT_STATUS = [

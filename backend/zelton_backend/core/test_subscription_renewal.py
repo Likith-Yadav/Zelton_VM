@@ -30,7 +30,7 @@ class SubscriptionRenewalTestCase(TestCase):
         
         # Create pricing plans
         self.starter_plan = PricingPlan.objects.create(
-            name='Starter Plan',
+            name='1-20 Houses',
             min_units=1,
             max_units=20,
             monthly_price=Decimal('2000.00'),
@@ -39,7 +39,7 @@ class SubscriptionRenewalTestCase(TestCase):
         )
         
         self.growth_plan = PricingPlan.objects.create(
-            name='Growth Plan',
+            name='21-40 Houses',
             min_units=21,
             max_units=40,
             monthly_price=Decimal('4000.00'),
@@ -193,7 +193,7 @@ class DowngradePreventionTestCase(TestCase):
         
         # Create pricing plans
         self.starter_plan = PricingPlan.objects.create(
-            name='Starter Plan',
+            name='1-20 Houses',
             min_units=1,
             max_units=20,
             monthly_price=Decimal('2000.00'),
@@ -202,7 +202,7 @@ class DowngradePreventionTestCase(TestCase):
         )
         
         self.growth_plan = PricingPlan.objects.create(
-            name='Growth Plan',
+            name='21-40 Houses',
             min_units=21,
             max_units=40,
             monthly_price=Decimal('4000.00'),

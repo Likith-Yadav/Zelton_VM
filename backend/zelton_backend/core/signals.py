@@ -1,6 +1,6 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from .models import Unit, Property, Owner, TenantKey, Payment, OwnerSubscriptionPayment
+from .models import Unit, Property, Owner, TenantKey, Payment, OwnerPayment
 
 
 @receiver(post_save, sender=Unit)
@@ -83,10 +83,10 @@ def update_unit_remaining_amount_on_payment(sender, instance, created, **kwargs)
         instance.unit.update_remaining_amount(instance.tenant)
 
 
-@receiver(post_save, sender=OwnerSubscriptionPayment)
+@receiver(post_save, sender=OwnerPayment)
 def handle_subscription_payment_completion(sender, instance, created, **kwargs):
     """Handle subscription payment completion and update owner limits"""
-    if not created and instance.status == 'completed':
+    if not created and instance.status == 'completed' and instance.payment_type in ['subscription', 'upgrade', 'renewal']:
         # Update owner's subscription plan
         owner = instance.owner
         owner.subscription_plan = instance.pricing_plan
@@ -100,6 +100,6 @@ def handle_subscription_payment_completion(sender, instance, created, **kwargs):
         logger = logging.getLogger(__name__)
         logger.info(
             f"Subscription updated for owner {owner.id}: "
-            f"Plan changed to {instance.pricing_plan.name} "
-            f"(max units: {instance.pricing_plan.max_units})"
+            f"Plan changed to {instance.pricing_plan.name if instance.pricing_plan else 'Unknown'} "
+            f"(max units: {instance.pricing_plan.max_units if instance.pricing_plan else 'Unknown'})"
         )
