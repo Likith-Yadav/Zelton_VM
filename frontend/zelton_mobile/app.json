@@ -2,7 +2,7 @@
   "expo": {
     "name": "ZeltonLivings",
     "slug": "zeltonlivings_mobile",
-    "version": "4",
+    "version": "5",
     "description": "Property management app for owners and tenants",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -38,9 +38,9 @@
       "package": "com.zeltonlivings.mobile",
       "compileSdkVersion": 35,
       "targetSdkVersion": 35,
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
       "icon": "./assets/icon.png",
