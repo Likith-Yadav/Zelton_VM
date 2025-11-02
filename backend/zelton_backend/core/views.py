@@ -1516,7 +1516,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     'message': 'Payment completed successfully',
                     'state': state,
                     'payment': PaymentSerializer(payment).data,
-                    'redirect_url': '/payment-success'  # Frontend redirect URL
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_200_OK)
             
             elif state == 'FAILED':
@@ -1528,7 +1528,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     'message': 'Payment failed',
                     'state': state,
                     'payment': PaymentSerializer(payment).data,
-                    'redirect_url': '/payment-failed'  # Frontend redirect URL
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             else:
@@ -1537,7 +1537,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     'message': 'Payment is still processing',
                     'state': state,
                     'payment': PaymentSerializer(payment).data,
-                    'redirect_url': '/payment-pending'  # Frontend redirect URL
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_200_OK)
                 
         except Exception as e:
@@ -2135,7 +2135,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 'message': 'Subscription upgrade payment initiated successfully',
                 'merchant_order_id': phonepe_response['merchant_order_id'],
                 'order_id': phonepe_response['order_id'],
-                'redirect_url': phonepe_response['redirect_url'],
+                'redirect_url': phonepe_response['redirect_url'],  # Required to open PhonePe payment page
                 'expire_at': phonepe_response['expire_at'],
                 'state': phonepe_response['state'],
                 'subscription_payment_id': subscription_payment.id,
@@ -2245,7 +2245,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                 'message': 'Subscription payment initiated successfully',
                 'merchant_order_id': phonepe_response['merchant_order_id'],
                 'order_id': phonepe_response['order_id'],
-                'redirect_url': phonepe_response['redirect_url'],
+                'redirect_url': phonepe_response['redirect_url'],  # Required to open PhonePe payment page
                 'expire_at': phonepe_response['expire_at'],
                 'state': phonepe_response['state'],
                 'subscription_payment_id': subscription_payment.id
@@ -2367,7 +2367,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                     'message': 'Subscription payment completed successfully',
                     'state': state,
                     'subscription_payment': payment_data,
-                    'redirect_url': '/subscription-success'
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_200_OK)
             
             elif state == 'FAILED':
@@ -2382,7 +2382,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                     'message': 'Subscription payment failed',
                     'state': state,
                     'subscription_payment': payment_data,
-                    'redirect_url': '/subscription-failed'
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             else:
@@ -2391,7 +2391,7 @@ class OwnerSubscriptionViewSet(viewsets.ModelViewSet):
                     'message': 'Subscription payment is still processing',
                     'state': state,
                     'subscription_payment': OwnerPaymentSerializer(owner_payment).data,
-                    'redirect_url': '/subscription-pending'
+                    # Removed redirect_url to prevent app restart - app should poll for status instead
                 }, status=status.HTTP_200_OK)
                 
         except Exception as e:

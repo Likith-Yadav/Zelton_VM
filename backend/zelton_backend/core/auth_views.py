@@ -65,10 +65,10 @@ class AuthViewSet(viewsets.ViewSet):
             
             # Create profile based on role
             if data['role'] == 'owner':
-                # Get the default pricing plan (1-20 Houses for new owners)
+                # Get the default pricing plan (Starter Plan for new owners)
                 from core.models import PricingPlan
                 default_plan = PricingPlan.objects.filter(
-                    name='1-20 Houses', 
+                    name='Starter Plan', 
                     is_active=True
                 ).first()
                 
@@ -390,6 +390,8 @@ Your verification code is: {verification_code}
 
 This code is valid for 10 minutes.
 
+For support, call us at +91 9880512345
+
 Best regards,
 The ZeltonLivings Team'''
             
@@ -403,6 +405,7 @@ The ZeltonLivings Team'''
                         <span style="font-size: 56px; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; font-family: 'Arial Black', Arial, sans-serif;">{verification_code}</span>
                     </div>
                     <p>This code is valid for 10 minutes.</p>
+                    <p>For support, call us at <a href="tel:+919880512345" style="color: #007bff; text-decoration: none;">+91 9880512345</a></p>
                     <p>Best regards,<br>The ZeltonLivings Team</p>
                 </body>
             </html>
@@ -554,7 +557,7 @@ This verification code is valid for 10 minutes.
 
 If you did not create an account with ZeltonLivings, please disregard this email.
 
-For support, contact us at support@zeltonlivings.com
+For support, call us at +91 9880512345
 
 Best regards,
 The ZeltonLivings Team"""
@@ -572,7 +575,7 @@ The ZeltonLivings Team"""
                     <p>Please enter this code in the app to complete your account setup.</p>
                     <p>This verification code is valid for 10 minutes.</p>
                     <p>If you did not create an account with ZeltonLivings, please disregard this email.</p>
-                    <p>For support, contact us at support@zeltonlivings.com</p>
+                    <p>For support, call us at <a href="tel:+919880512345" style="color: #007bff; text-decoration: none;">+91 9880512345</a></p>
                     <p>Best regards,<br>The ZeltonLivings Team</p>
                 </body>
             </html>
@@ -714,6 +717,8 @@ Your password reset verification code is:
 
 This code will expire in 10 minutes.
 
+For support, call us at +91 9880512345
+
 Best regards,
 ZeltonLivings Team
 """
@@ -728,6 +733,7 @@ ZeltonLivings Team
                         <span style="font-size: 56px; font-weight: 900; color: #1a1a1a; letter-spacing: 8px; font-family: 'Arial Black', Arial, sans-serif;">{verification_code}</span>
                     </div>
                     <p>This code will expire in 10 minutes.</p>
+                    <p>For support, call us at <a href="tel:+919880512345" style="color: #007bff; text-decoration: none;">+91 9880512345</a></p>
                     <p>Best regards,<br>ZeltonLivings Team</p>
                 </body>
             </html>

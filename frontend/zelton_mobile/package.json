@@ -18,7 +18,7 @@
     "@react-navigation/stack": "^7.4.9",
     "axios": "^1.12.2",
     "eas-cli": "^16.24.1",
-    "expo": "54.0.15",
+    "expo": "54.0.21",
     "expo-auth-session": "^7.0.8",
     "expo-camera": "^17.0.8",
     "expo-clipboard": "~8.0.7",

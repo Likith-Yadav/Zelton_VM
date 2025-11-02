@@ -70,8 +70,9 @@ class PhonePeService:
             # Convert amount to paise
             amount_paise = int(float(amount) * 100)
             
-            # Create redirect URL - using mobile app deep link with orderId parameter
-            redirect_url = f"ZeltonLivings://payment/callback?orderId={merchant_order_id}"
+            # Use configured redirect URL from settings (required by PhonePe but not used in app flow)
+            # The app will poll for payment status instead of relying on redirect
+            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success"
             
             # Create meta info
             meta_info = MetaInfo(
@@ -97,7 +98,7 @@ class PhonePeService:
                 'success': True,
                 'merchant_order_id': merchant_order_id,
                 'order_id': response.order_id,
-                'redirect_url': response.redirect_url,
+                'redirect_url': response.redirect_url,  # Required to open PhonePe payment page
                 'expire_at': response.expire_at,
                 'state': response.state
             }
@@ -144,9 +145,10 @@ class PhonePeService:
             amount_paise = int(float(total_amount) * 100)
             logger.info(f"Payment amount: Base={base_decimal}, GST={gst_amount}, Total={total_amount}, Amount in paise={amount_paise}")
             
-            # Create redirect URL - using mobile app deep link with orderId parameter
-            redirect_url = f"ZeltonLivings://payment/callback?orderId={merchant_order_id}"
-            logger.info(f"Redirect URL: {redirect_url}")
+            # Use configured redirect URL from settings (required by PhonePe but not used in app flow)
+            # The app will poll for payment status instead of relying on redirect
+            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success"
+            logger.info(f"Using redirect URL from settings: {redirect_url} (app will poll for status)")
             
             # Create detailed breakdown in meta info
             plan_name = pricing_plan.name or f"{pricing_plan.plan_type.title()} Plan"
@@ -177,7 +179,7 @@ class PhonePeService:
                 'success': True,
                 'merchant_order_id': merchant_order_id,
                 'order_id': response.order_id,
-                'redirect_url': response.redirect_url,
+                'redirect_url': response.redirect_url,  # Required to open PhonePe payment page
                 'expire_at': response.expire_at,
                 'state': response.state
             }
