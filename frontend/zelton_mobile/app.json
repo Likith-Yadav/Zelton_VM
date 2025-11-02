@@ -2,7 +2,7 @@
   "expo": {
     "name": "ZeltonLivings",
     "slug": "zeltonlivings_mobile",
-    "version": "1.0.1",
+    "version": "3",
     "description": "Property management app for owners and tenants",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
