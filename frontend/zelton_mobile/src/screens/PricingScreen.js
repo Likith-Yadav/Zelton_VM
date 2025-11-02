@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,8 @@ const PricingScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [scrollY] = useState(new Animated.Value(0));
   const [userData, setUserData] = useState(null);
+  const scrollViewRef = useRef(null);
+  const planPositions = useRef({});
 
   // Convert property count range to numeric value for comparison
   const getPropertyCountValue = (count) => {
@@ -61,7 +63,26 @@ const PricingScreen = ({ navigation, route }) => {
     console.log("PricingScreen mounted, loading pricing plans...");
     loadPricingPlans();
     loadUserData();
-  }, [propertyCount]);
+  }, []);
+
+  // Scroll to recommended plan when propertyCount changes
+  useEffect(() => {
+    if (pricingPlans.length > 0) {
+      const recommendedPlan = getRecommendedPlan();
+      if (recommendedPlan && planPositions.current[recommendedPlan.id] !== undefined) {
+        // Scroll to the recommended plan after a short delay to ensure rendering
+        setTimeout(() => {
+          const yPosition = planPositions.current[recommendedPlan.id];
+          if (yPosition !== undefined && scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({
+              y: Math.max(0, yPosition - 100), // Offset by 100px for better visibility
+              animated: true,
+            });
+          }
+        }, 300);
+      }
+    }
+  }, [propertyCount, pricingPlans]);
 
   useEffect(() => {
     if (route.params?.isUpgrade) {
@@ -98,8 +119,8 @@ const PricingScreen = ({ navigation, route }) => {
         const numericCount = getPropertyCountValue(propertyCount);
         const recommendedPlan = data.results.find(
           (plan) =>
-            numericCount >= plan.min_properties &&
-            numericCount <= plan.max_properties
+            numericCount >= (plan.min_units || plan.min_properties || 0) &&
+            numericCount <= (plan.max_units || plan.max_properties || 999999)
         );
         if (recommendedPlan) {
           console.log("Auto-selecting plan:", recommendedPlan);
@@ -113,8 +134,8 @@ const PricingScreen = ({ navigation, route }) => {
         const numericCount = getPropertyCountValue(propertyCount);
         const recommendedPlan = data.find(
           (plan) =>
-            numericCount >= plan.min_properties &&
-            numericCount <= plan.max_properties
+            numericCount >= (plan.min_units || plan.min_properties || 0) &&
+            numericCount <= (plan.max_units || plan.max_properties || 999999)
         );
         if (recommendedPlan) {
           console.log("Auto-selecting plan:", recommendedPlan);
@@ -140,8 +161,8 @@ const PricingScreen = ({ navigation, route }) => {
     const numericCount = getPropertyCountValue(propertyCount);
     return pricingPlans.find(
       (plan) =>
-        numericCount >= plan.min_properties &&
-        numericCount <= plan.max_properties
+        numericCount >= (plan.min_units || plan.min_properties || 0) &&
+        numericCount <= (plan.max_units || plan.max_properties || 999999)
     );
   };
 
@@ -249,6 +270,10 @@ const PricingScreen = ({ navigation, route }) => {
     return (
       <TouchableOpacity
         key={plan.id}
+        onLayout={(event) => {
+          const { y } = event.nativeEvent.layout;
+          planPositions.current[plan.id] = y;
+        }}
         style={[
           styles.pricingCard,
           isSelected && styles.selectedPricingCard,
@@ -276,9 +301,9 @@ const PricingScreen = ({ navigation, route }) => {
             <Text
               style={[styles.planRange, isSelected && styles.selectedPlanRange]}
             >
-              {plan.min_properties}-
-              {plan.max_properties === 999999 ? "∞" : plan.max_properties}{" "}
-              properties
+              {(plan.min_units || plan.min_properties || 0)}-
+              {(plan.max_units || plan.max_properties || 0) === 999999 ? "∞" : (plan.max_units || plan.max_properties || 0)}{" "}
+              houses
             </Text>
           </View>
 
@@ -395,6 +420,7 @@ const PricingScreen = ({ navigation, route }) => {
 
       {/* Scrollable Content */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -431,7 +457,16 @@ const PricingScreen = ({ navigation, route }) => {
                   styles.propertyCountButton,
                   propertyCount === count && styles.selectedPropertyCountButton,
                 ]}
-                onPress={() => setPropertyCount(count)}
+                onPress={() => {
+                  setPropertyCount(count);
+                  // Auto-select and scroll to the recommended plan
+                  setTimeout(() => {
+                    const recommendedPlan = getRecommendedPlan();
+                    if (recommendedPlan) {
+                      setSelectedPlan(recommendedPlan.id);
+                    }
+                  }, 100);
+                }}
               >
                 <Text
                   style={[

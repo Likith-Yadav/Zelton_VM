@@ -70,9 +70,9 @@ class PhonePeService:
             # Convert amount to paise
             amount_paise = int(float(amount) * 100)
             
-            # Use configured redirect URL from settings (required by PhonePe but not used in app flow)
+            # Use configured redirect URL from settings (leave empty to avoid redirect after payment)
             # The app will poll for payment status instead of relying on redirect
-            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success"
+            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success" if settings.PHONEPE_REDIRECT_BASE_URL else ""
             
             # Create meta info
             meta_info = MetaInfo(
@@ -145,10 +145,10 @@ class PhonePeService:
             amount_paise = int(float(total_amount) * 100)
             logger.info(f"Payment amount: Base={base_decimal}, GST={gst_amount}, Total={total_amount}, Amount in paise={amount_paise}")
             
-            # Use configured redirect URL from settings (required by PhonePe but not used in app flow)
+            # Use configured redirect URL from settings (leave empty to avoid redirect after payment)
             # The app will poll for payment status instead of relying on redirect
-            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success"
-            logger.info(f"Using redirect URL from settings: {redirect_url} (app will poll for status)")
+            redirect_url = f"{settings.PHONEPE_REDIRECT_BASE_URL}/payment-success" if settings.PHONEPE_REDIRECT_BASE_URL else ""
+            logger.info(f"Using redirect URL: {redirect_url if redirect_url else 'empty (no redirect)'} (app will poll for status)")
             
             # Create detailed breakdown in meta info
             plan_name = pricing_plan.name or f"{pricing_plan.plan_type.title()} Plan"
