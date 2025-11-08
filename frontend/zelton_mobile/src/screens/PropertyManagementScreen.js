@@ -47,6 +47,9 @@ const PropertyManagementScreen = ({ navigation }) => {
     description: "",
   });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollViewRef = React.useRef(null);
+  const inputRefs = React.useRef({});
   // Maintenance contacts are managed per unit, not at property level
 
   useEffect(() => {
@@ -54,17 +57,19 @@ const PropertyManagementScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // Listen for keyboard show/hide events
+    // Listen for keyboard show/hide events with height tracking
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => {
+      (e) => {
         setKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
         setKeyboardVisible(false);
+        setKeyboardHeight(0);
       }
     );
 
@@ -73,6 +78,20 @@ const PropertyManagementScreen = ({ navigation }) => {
       keyboardDidHideListener.remove();
     };
   }, []);
+
+  // Scroll to input when focused - scroll to end for last inputs
+  const handleInputFocus = (inputName) => {
+    if (Platform.OS === "android" && scrollViewRef.current) {
+      // For last inputs (pincode, description), scroll to end
+      if (inputName === "pincode" || inputName === "description") {
+        setTimeout(() => {
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollToEnd({ animated: true });
+          }
+        }, 300);
+      }
+    }
+  };
 
   useEffect(() => {
     if (showDetailedView !== undefined) {
@@ -585,42 +604,52 @@ const PropertyManagementScreen = ({ navigation }) => {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalBody}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
             <ScrollView 
+              ref={scrollViewRef}
               style={styles.modalContent}
               contentContainerStyle={[
                 styles.modalContentContainer,
-                keyboardVisible && Platform.OS === "android" && { paddingBottom: 300 }
+                {
+                  paddingBottom: Platform.OS === "android" && keyboardVisible 
+                    ? Math.max(keyboardHeight + 100, 400) 
+                    : spacing.xxl * 2
+                }
               ]}
               showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
+              nestedScrollEnabled={Platform.OS === "android"}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               bounces={Platform.OS === "ios"}
               scrollEnabled={true}
+              automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
             >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Property Name *</Text>
               <TextInput
+                ref={(ref) => (inputRefs.current.name = ref)}
                 style={styles.textInput}
                 value={formData.name}
                 onChangeText={(text) => {
                   setFormData({ ...formData, name: text });
                 }}
+                onFocus={() => handleInputFocus("name")}
                 placeholder="Enter property name"
                 placeholderTextColor={colors.textLight}
               />
 
               <Text style={styles.inputLabel}>Address *</Text>
               <TextInput
+                ref={(ref) => (inputRefs.current.address = ref)}
                 style={[styles.textInput, styles.textArea]}
                 value={formData.address}
                 onChangeText={(text) =>
                   setFormData({ ...formData, address: text })
                 }
+                onFocus={() => handleInputFocus("address")}
                 placeholder="Enter full address"
                 placeholderTextColor={colors.textLight}
                 multiline
@@ -631,11 +660,13 @@ const PropertyManagementScreen = ({ navigation }) => {
                 <View style={styles.halfWidth}>
                   <Text style={styles.inputLabel}>City *</Text>
                   <TextInput
+                    ref={(ref) => (inputRefs.current.city = ref)}
                     style={styles.textInput}
                     value={formData.city}
                     onChangeText={(text) =>
                       setFormData({ ...formData, city: text })
                     }
+                    onFocus={() => handleInputFocus("city")}
                     placeholder="Enter city"
                     placeholderTextColor={colors.textLight}
                   />
@@ -643,11 +674,13 @@ const PropertyManagementScreen = ({ navigation }) => {
                 <View style={styles.halfWidth}>
                   <Text style={styles.inputLabel}>State *</Text>
                   <TextInput
+                    ref={(ref) => (inputRefs.current.state = ref)}
                     style={styles.textInput}
                     value={formData.state}
                     onChangeText={(text) =>
                       setFormData({ ...formData, state: text })
                     }
+                    onFocus={() => handleInputFocus("state")}
                     placeholder="Enter state"
                     placeholderTextColor={colors.textLight}
                   />
@@ -656,11 +689,13 @@ const PropertyManagementScreen = ({ navigation }) => {
 
               <Text style={styles.inputLabel}>Pincode *</Text>
               <TextInput
+                ref={(ref) => (inputRefs.current.pincode = ref)}
                 style={styles.textInput}
                 value={formData.pincode}
                 onChangeText={(text) =>
                   setFormData({ ...formData, pincode: text })
                 }
+                onFocus={() => handleInputFocus("pincode")}
                 placeholder="Enter pincode"
                 placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
@@ -696,6 +731,7 @@ const PropertyManagementScreen = ({ navigation }) => {
 
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
+                ref={(ref) => (inputRefs.current.description = ref)}
                 style={[styles.textInput, styles.textArea]}
                 value={formData.description}
                 onChangeText={(text) => {
@@ -703,6 +739,7 @@ const PropertyManagementScreen = ({ navigation }) => {
                     setFormData({ ...formData, description: text });
                   }
                 }}
+                onFocus={() => handleInputFocus("description")}
                 placeholder="Enter property description (optional)"
                 placeholderTextColor={colors.textLight}
                 multiline
@@ -717,8 +754,6 @@ const PropertyManagementScreen = ({ navigation }) => {
 
               {/* Maintenance contacts removed from property form. Manage per unit in Unit Management. */}
             </GradientCard>
-            {/* Add extra spacing at bottom to ensure button is accessible */}
-            <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
           </ScrollView>
 
             <View style={styles.modalFooter}>

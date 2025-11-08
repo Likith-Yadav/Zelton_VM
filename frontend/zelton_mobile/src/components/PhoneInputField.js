@@ -79,7 +79,13 @@ const PhoneInputField = ({
           placeholderTextColor={colors.textLight}
           value={value}
           onChangeText={handleTextChange}
-          onFocus={handleFocus}
+          onFocus={(e) => {
+            handleFocus();
+            // Call custom onFocus if provided
+            if (props.onFocus) {
+              props.onFocus(e);
+            }
+          }}
           onBlur={handleBlur}
           keyboardType="phone-pad"
           maxLength={PHONE_VALIDATION.MAX_LENGTH}

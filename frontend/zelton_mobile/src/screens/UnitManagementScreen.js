@@ -71,6 +71,9 @@ const UnitManagementScreen = ({ navigation, route }) => {
   });
   const [showPropertySelector, setShowPropertySelector] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const maintenanceScrollViewRef = React.useRef(null);
+  const unitScrollViewRef = React.useRef(null);
 
   useEffect(() => {
     if (property) {
@@ -84,17 +87,19 @@ const UnitManagementScreen = ({ navigation, route }) => {
   }, [property]);
 
   useEffect(() => {
-    // Listen for keyboard show/hide events
+    // Listen for keyboard show/hide events with height tracking
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => {
+      (e) => {
         setKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {
         setKeyboardVisible(false);
+        setKeyboardHeight(0);
       }
     );
 
@@ -103,6 +108,31 @@ const UnitManagementScreen = ({ navigation, route }) => {
       keyboardDidHideListener.remove();
     };
   }, []);
+
+  // Scroll to end when keyboard appears for maintenance contact inputs
+  const handleMaintenanceInputFocus = () => {
+    if (Platform.OS === "android" && maintenanceScrollViewRef.current) {
+      setTimeout(() => {
+        if (maintenanceScrollViewRef.current) {
+          maintenanceScrollViewRef.current.scrollToEnd({ animated: true });
+        }
+      }, 300);
+    }
+  };
+
+  // Scroll to end when keyboard appears for unit inputs
+  const handleUnitInputFocus = (inputName) => {
+    if (Platform.OS === "android" && unitScrollViewRef.current) {
+      // For last inputs, scroll to end
+      if (inputName === "area_sqft" || inputName === "description" || inputName === "rent_due_date") {
+        setTimeout(() => {
+          if (unitScrollViewRef.current) {
+            unitScrollViewRef.current.scrollToEnd({ animated: true });
+          }
+        }, 300);
+      }
+    }
+  };
 
   useEffect(() => {
     // Show property selector if no property is selected and properties are loaded
@@ -976,22 +1006,28 @@ const UnitManagementScreen = ({ navigation, route }) => {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalBody}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
             <ScrollView 
+              ref={unitScrollViewRef}
               style={styles.modalContent}
               contentContainerStyle={[
                 styles.modalContentContainer,
-                keyboardVisible && Platform.OS === "android" && { paddingBottom: 300 }
+                {
+                  paddingBottom: Platform.OS === "android" && keyboardVisible 
+                    ? Math.max(keyboardHeight + 150, 450) 
+                    : spacing.xxl * 2
+                }
               ]}
               showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
+              nestedScrollEnabled={Platform.OS === "android"}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               bounces={Platform.OS === "ios"}
               scrollEnabled={true}
+              automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
             >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Unit Number *</Text>
@@ -1079,6 +1115,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
                         }
                       }
                     }}
+                    onFocus={() => handleUnitInputFocus("rent_due_date")}
                     placeholder="Enter day (1-31)"
                     placeholderTextColor={colors.textLight}
                     keyboardType="numeric"
@@ -1093,6 +1130,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
                     onChangeText={(text) =>
                       setFormData({ ...formData, area_sqft: text })
                     }
+                    onFocus={() => handleUnitInputFocus("area_sqft")}
                     placeholder="Optional"
                     placeholderTextColor={colors.textLight}
                     keyboardType="numeric"
@@ -1109,6 +1147,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
                     setFormData({ ...formData, description: text });
                   }
                 }}
+                onFocus={() => handleUnitInputFocus("description")}
                 placeholder="Enter unit description (optional)"
                 placeholderTextColor={colors.textLight}
                 multiline
@@ -1190,8 +1229,6 @@ const UnitManagementScreen = ({ navigation, route }) => {
                 </TouchableOpacity>
                </View>
              </GradientCard>
-             {/* Add extra spacing at bottom to ensure button is accessible */}
-             <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
            </ScrollView>
 
            <View style={styles.modalFooter}>
@@ -1227,22 +1264,28 @@ const UnitManagementScreen = ({ navigation, route }) => {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.modalBody}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           >
             <ScrollView 
+              ref={maintenanceScrollViewRef}
               style={styles.modalContent}
               contentContainerStyle={[
                 styles.modalContentContainer,
-                keyboardVisible && Platform.OS === "android" && { paddingBottom: 200 }
+                {
+                  paddingBottom: Platform.OS === "android" && keyboardVisible 
+                    ? Math.max(keyboardHeight + 100, 400) 
+                    : spacing.xxl * 2
+                }
               ]}
               showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
+              nestedScrollEnabled={Platform.OS === "android"}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               bounces={Platform.OS === "ios"}
               scrollEnabled={true}
+              automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
             >
              <GradientCard variant="surface" style={styles.formCard}>
                <Text style={styles.inputLabel}>Service Type</Text>
@@ -1285,6 +1328,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
                     name: text,
                   })
                 }
+                onFocus={handleMaintenanceInputFocus}
                 placeholder="Enter contact name"
                 placeholderTextColor={colors.textLight}
               />
@@ -1298,11 +1342,10 @@ const UnitManagementScreen = ({ navigation, route }) => {
                     phone: text,
                   })
                 }
+                onFocus={handleMaintenanceInputFocus}
                 placeholder="Enter phone number"
-               />
+              />
              </GradientCard>
-             {/* Add extra spacing at bottom */}
-             <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
            </ScrollView>
 
            <View style={styles.modalFooter}>
