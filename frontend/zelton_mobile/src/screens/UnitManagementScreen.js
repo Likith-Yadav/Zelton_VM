@@ -9,6 +9,9 @@ import {
   Alert,
   TextInput,
   Modal,
+  Platform,
+  Keyboard,
+  KeyboardAvoidingView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -67,6 +70,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
     phone: "",
   });
   const [showPropertySelector, setShowPropertySelector] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
     if (property) {
@@ -78,6 +82,27 @@ const UnitManagementScreen = ({ navigation, route }) => {
       loadAllProperties();
     }
   }, [property]);
+
+  useEffect(() => {
+    // Listen for keyboard show/hide events
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // Show property selector if no property is selected and properties are loaded
@@ -950,7 +975,24 @@ const UnitManagementScreen = ({ navigation, route }) => {
             <View style={styles.placeholder} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.modalBody}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+          >
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={[
+                styles.modalContentContainer,
+                keyboardVisible && Platform.OS === "android" && { paddingBottom: 300 }
+              ]}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              bounces={Platform.OS === "ios"}
+              scrollEnabled={true}
+            >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Unit Number *</Text>
               <TextInput
@@ -1146,17 +1188,20 @@ const UnitManagementScreen = ({ navigation, route }) => {
                     Add Maintenance Contact
                   </Text>
                 </TouchableOpacity>
-              </View>
-            </GradientCard>
-          </ScrollView>
+               </View>
+             </GradientCard>
+             {/* Add extra spacing at bottom to ensure button is accessible */}
+             <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
+           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <GradientButton
-              title={editingUnit ? "Update Unit" : "Add Unit"}
-              onPress={handleSaveUnit}
-              loading={loading}
-            />
-          </View>
+           <View style={styles.modalFooter}>
+             <GradientButton
+               title={editingUnit ? "Update Unit" : "Add Unit"}
+               onPress={handleSaveUnit}
+               loading={loading}
+             />
+           </View>
+          </KeyboardAvoidingView>
         </LinearGradient>
       </Modal>
 
@@ -1181,9 +1226,26 @@ const UnitManagementScreen = ({ navigation, route }) => {
             <View style={styles.placeholder} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
-            <GradientCard variant="surface" style={styles.formCard}>
-              <Text style={styles.inputLabel}>Service Type</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.modalBody}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+          >
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={[
+                styles.modalContentContainer,
+                keyboardVisible && Platform.OS === "android" && { paddingBottom: 200 }
+              ]}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              bounces={Platform.OS === "ios"}
+              scrollEnabled={true}
+            >
+             <GradientCard variant="surface" style={styles.formCard}>
+               <Text style={styles.inputLabel}>Service Type</Text>
               <View style={styles.typeSelector}>
                 {SERVICE_TYPES.map((type) => (
                   <TouchableOpacity
@@ -1237,16 +1299,19 @@ const UnitManagementScreen = ({ navigation, route }) => {
                   })
                 }
                 placeholder="Enter phone number"
-              />
-            </GradientCard>
-          </ScrollView>
+               />
+             </GradientCard>
+             {/* Add extra spacing at bottom */}
+             <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
+           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <GradientButton
-              title="Add Contact"
-              onPress={handleSaveMaintenanceContact}
-            />
-          </View>
+           <View style={styles.modalFooter}>
+             <GradientButton
+               title="Add Contact"
+               onPress={handleSaveMaintenanceContact}
+             />
+           </View>
+          </KeyboardAvoidingView>
         </LinearGradient>
       </Modal>
 
@@ -1727,9 +1792,17 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  modalBody: {
+    flex: 1,
+  },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    flexGrow: 1,
   },
   formCard: {
     padding: spacing.lg,
@@ -1795,6 +1868,9 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     padding: spacing.lg,
+    paddingBottom: Platform.OS === "android" ? spacing.xl : spacing.lg,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
   },
   loadingContainer: {
     alignItems: "center",

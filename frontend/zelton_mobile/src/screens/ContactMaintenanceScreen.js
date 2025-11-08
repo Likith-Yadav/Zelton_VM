@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -194,6 +195,9 @@ const ContactMaintenanceScreen = ({ navigation }) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={Platform.OS === "android"}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={true}
       >
         {/* Info Card */}
         <GradientCard variant="primary" style={styles.infoCard}>

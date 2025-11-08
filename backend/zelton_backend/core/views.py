@@ -146,9 +146,10 @@ class OwnerViewSet(viewsets.ModelViewSet):
         pending_amount = total_due
         overdue_amount = 0  # We'll calculate this separately if needed
 
-        # Get recent payments with tenant information
+        # Get recent payments with tenant information (only completed payments)
         recent_payments = Payment.objects.filter(
-            unit__property__in=properties
+            unit__property__in=properties,
+            status='completed'
         ).select_related('tenant__user', 'unit__property').order_by('-created_at')[:5]
 
         # Get recent tenants
@@ -198,6 +199,51 @@ class PropertyViewSet(viewsets.ModelViewSet):
             return Property.objects.filter(owner=owner)
         return Property.objects.none()
 
+    def list(self, request, *args, **kwargs):
+        """Override list to include payment statistics"""
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = self.get_serializer(queryset, many=True)
+            data = serializer.data
+            
+            # Enhance with payment data
+            current_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            for property_data in data:
+                try:
+                    property_obj = Property.objects.get(id=property_data['id'])
+                    # Calculate payment statistics
+                    total_payments = Payment.objects.filter(
+                        unit__property=property_obj,
+                        status='completed'
+                    ).aggregate(total=Sum('amount'))['total'] or 0
+                    
+                    current_month_payments = Payment.objects.filter(
+                        unit__property=property_obj,
+                        status='completed'
+                    ).filter(
+                        Q(payment_date__gte=current_month) | Q(payment_date__isnull=True, created_at__gte=current_month)
+                    ).aggregate(total=Sum('amount'))['total'] or 0
+                    
+                    pending_payments = Payment.objects.filter(
+                        unit__property=property_obj,
+                        status='pending'
+                    ).aggregate(total=Sum('amount'))['total'] or 0
+                    
+                    property_data['total_payments'] = float(total_payments)
+                    property_data['current_month_payments'] = float(current_month_payments)
+                    property_data['pending_payments'] = float(pending_payments)
+                except (Property.DoesNotExist, KeyError, ValueError) as e:
+                    logger.warning(f"Error enhancing property data: {e}")
+                    property_data['total_payments'] = 0
+                    property_data['current_month_payments'] = 0
+                    property_data['pending_payments'] = 0
+            
+            return Response(data)
+        except Exception as e:
+            logger.error(f"Error in property list: {e}")
+            # Fallback to default list behavior
+            return super().list(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         
         serializer = self.get_serializer(data=request.data)
@@ -243,15 +289,17 @@ class PropertyViewSet(viewsets.ModelViewSet):
                     status='completed'
                 ).aggregate(total=Sum('amount'))['total'] or 0
                 
-                # Current month payments
-                current_month = timezone.now().replace(day=1)
+                # Current month payments - use payment_date for accurate monthly tracking
+                # Include payments where payment_date is in current month OR payment_date is null but created_at is in current month
+                current_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 current_month_payments = Payment.objects.filter(
                     unit__property=property,
-                    status='completed',
-                    created_at__gte=current_month
+                    status='completed'
+                ).filter(
+                    Q(payment_date__gte=current_month) | Q(payment_date__isnull=True, created_at__gte=current_month)
                 ).aggregate(total=Sum('amount'))['total'] or 0
                 
-                # Pending payments
+                # Pending payments - only for units in this property
                 pending_payments = Payment.objects.filter(
                     unit__property=property,
                     status='pending'
@@ -280,10 +328,13 @@ class PropertyViewSet(viewsets.ModelViewSet):
                         status='completed'
                     ).aggregate(total=Sum('amount'))['total'] or 0
                     
+                    # Use payment_date for accurate monthly tracking
+                    # Include payments where payment_date is in current month OR payment_date is null but created_at is in current month
                     unit_current_month_payments = Payment.objects.filter(
                         unit=unit,
-                        status='completed',
-                        created_at__gte=current_month
+                        status='completed'
+                    ).filter(
+                        Q(payment_date__gte=current_month) | Q(payment_date__isnull=True, created_at__gte=current_month)
                     ).aggregate(total=Sum('amount'))['total'] or 0
                     
                     unit_pending_payments = Payment.objects.filter(
@@ -1992,9 +2043,10 @@ class AnalyticsViewSet(viewsets.ViewSet):
         """Get recent activity data"""
         activities = []
         
-        # Recent payments
+        # Recent payments (only completed payments)
         recent_payments = Payment.objects.filter(
-            unit__property__in=properties
+            unit__property__in=properties,
+            status='completed'
         ).order_by('-created_at')[:5]
         
         for payment in recent_payments:

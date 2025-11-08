@@ -284,17 +284,22 @@ const TenantDashboardScreen = ({ navigation }) => {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
+    // Normalize status to lowercase for comparison
+    const normalizedStatus = (status || "").toLowerCase();
+    
+    switch (normalizedStatus) {
       case "paid":
+      case "completed":
+      case "success":
         return colors.success; // Green
       case "overdue":
+      case "failed":
         return colors.error; // Red
       case "partial":
-        return colors.warning; // Orange
+      case "pending":
+        return colors.warning; // Orange/Yellow
       case "up_to_date":
         return colors.success; // Legacy support
-      case "pending":
-        return colors.warning;
       default:
         return colors.textSecondary;
     }
@@ -782,7 +787,7 @@ const TenantDashboardScreen = ({ navigation }) => {
         <View style={styles.recentPaymentsContainer}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Payments</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Payment")}>
+            <TouchableOpacity onPress={() => navigation.navigate("PaymentTransactions")}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -802,13 +807,13 @@ const TenantDashboardScreen = ({ navigation }) => {
                   <View
                     style={[
                       styles.paymentStatusBadge,
-                      { backgroundColor: colors.success + "20" },
+                      { backgroundColor: getStatusColor(payment.status) + "20" },
                     ]}
                   >
                     <Text
                       style={[
                         styles.paymentStatusText,
-                        { color: colors.success },
+                        { color: getStatusColor(payment.status) },
                       ]}
                     >
                       {payment.status}

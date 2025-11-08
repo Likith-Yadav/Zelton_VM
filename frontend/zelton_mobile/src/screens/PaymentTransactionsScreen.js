@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +23,8 @@ import {
 } from "../theme/theme";
 import { formatCurrency, formatDate } from "../utils/helpers";
 import DataService from "../services/dataService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { STORAGE_KEYS } from "../constants/constants";
 
 const { width } = Dimensions.get("window");
 
@@ -31,32 +34,87 @@ const PaymentTransactionsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all"); // all, completed, pending, failed
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
+    loadUserRole();
     loadPayments();
   }, []);
+
+  const loadUserRole = async () => {
+    try {
+      const role = await AsyncStorage.getItem(STORAGE_KEYS.USER_ROLE);
+      setUserRole(role);
+    } catch (error) {
+      console.error("Error loading user role:", error);
+    }
+  };
 
   const loadPayments = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await DataService.getPayments();
+      console.log("Loading payments...");
+      
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Request timeout")), 10000)
+      );
+      
+      const apiPromise = DataService.getPayments();
+      const response = await Promise.race([apiPromise, timeoutPromise]);
+      
+      console.log("Payments API response:", JSON.stringify(response, null, 2));
 
-      if (response.success) {
-        // Ensure we always set an array, even if the API returns null/undefined
-        const paymentsData = Array.isArray(response.data) ? response.data : [];
+      // Handle response - DataService.getPayments() wraps the response
+      let paymentsData = [];
+      
+      if (response && response.success !== false) {
+        // Handle different response formats
+        if (Array.isArray(response.data)) {
+          paymentsData = response.data;
+        } else if (response.data && Array.isArray(response.data.results)) {
+          // Paginated response
+          paymentsData = response.data.results;
+        } else if (response.data && typeof response.data === 'object') {
+          // Try to extract payments from object
+          paymentsData = response.data.payments || response.data.data || [];
+        } else if (response && Array.isArray(response)) {
+          // Direct array response
+          paymentsData = response;
+        }
+        
+        // Ensure paymentsData is an array
+        if (!Array.isArray(paymentsData)) {
+          console.warn("Payments data is not an array:", paymentsData);
+          paymentsData = [];
+        }
+
         setPayments(paymentsData);
         console.log("Loaded payments:", paymentsData.length);
+        
+        if (paymentsData.length === 0) {
+          console.log("No payments found - this is normal if user has no payments yet");
+        }
       } else {
-        setError(response.error || "Failed to load payments");
-        setPayments([]); // Set empty array on error
+        // Handle error response
+        const errorMsg = response?.error || response?.message || "Failed to load payments";
+        console.error("Error loading payments:", errorMsg);
+        setError(errorMsg);
+        setPayments([]);
       }
     } catch (err) {
       console.error("Payments load error:", err);
-      setError("Failed to load payments");
-      setPayments([]); // Set empty array on error
+      console.error("Error details:", err.message, err.stack);
+      const errorMessage = err.message === "Request timeout" 
+        ? "Request took too long. Please check your connection and try again."
+        : err.response?.data?.error || err.message || "Failed to load payments. Please try again.";
+      setError(errorMessage);
+      setPayments([]);
     } finally {
+      // Always set loading to false, even if there's an error
+      console.log("Setting loading to false");
       setLoading(false);
     }
   };
@@ -111,16 +169,35 @@ const PaymentTransactionsScreen = ({ navigation }) => {
     return paymentStatus === filter;
   });
 
-  const renderPaymentCard = (payment) => (
+  const renderPaymentCard = (payment) => {
+    // For tenants, show month/period instead of tenant name
+    const isTenant = userRole === "tenant";
+    const paymentDate = payment.payment_date || payment.created_at || payment.updated_at;
+    const month = paymentDate 
+      ? new Date(paymentDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      : "N/A";
+    
+    return (
     <GradientCard key={payment.id} variant="surface" style={styles.paymentCard}>
       <View style={styles.paymentHeader}>
         <View style={styles.paymentInfo}>
-          <Text style={styles.tenantName}>{payment.tenant_name || "N/A"}</Text>
-          <Text style={styles.unitInfo}>
-            {payment.property_name} - Unit {payment.unit_number}
-          </Text>
+          {isTenant ? (
+            <>
+              <Text style={styles.tenantName}>{month}</Text>
+              <Text style={styles.unitInfo}>
+                {payment.property_name || "Property"} - Unit {payment.unit_number || "N/A"}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.tenantName}>{payment.tenant_name || "N/A"}</Text>
+              <Text style={styles.unitInfo}>
+                {payment.property_name} - Unit {payment.unit_number}
+              </Text>
+            </>
+          )}
           <Text style={styles.paymentDate}>
-            {formatDate(payment.payment_date || payment.created_at || payment.updated_at)}
+            {formatDate(paymentDate)}
           </Text>
         </View>
         <View style={styles.paymentStatus}>
@@ -160,22 +237,30 @@ const PaymentTransactionsScreen = ({ navigation }) => {
           </View>
         )}
 
-        {payment.transaction_id && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Transaction ID</Text>
-            <Text style={styles.detailValue}>{payment.transaction_id}</Text>
-          </View>
-        )}
-
         {payment.notes && (
           <View style={styles.notesRow}>
             <Text style={styles.notesLabel}>Notes</Text>
             <Text style={styles.notesValue}>{payment.notes}</Text>
           </View>
         )}
+
+        {payment.merchant_order_id && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Order ID</Text>
+            <Text style={styles.detailValue}>{payment.merchant_order_id}</Text>
+          </View>
+        )}
+
+        {payment.phonepe_transaction_id && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction ID</Text>
+            <Text style={styles.detailValue}>{payment.phonepe_transaction_id}</Text>
+          </View>
+        )}
       </View>
     </GradientCard>
-  );
+    );
+  };
 
   const renderFilterButton = (filterType, label) => (
     <TouchableOpacity
@@ -196,7 +281,8 @@ const PaymentTransactionsScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  if (loading && !refreshing) {
+  // Show loading only on initial load when we have no data and no error
+  if (loading && !refreshing && payments.length === 0 && !error) {
     return (
       <LinearGradient
         colors={gradients.background}
@@ -215,7 +301,7 @@ const PaymentTransactionsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.loadingContainer}>
-          <Ionicons name="refresh" size={32} color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading payments...</Text>
         </View>
       </LinearGradient>

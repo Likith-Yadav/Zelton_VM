@@ -11,6 +11,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -45,10 +46,32 @@ const PropertyManagementScreen = ({ navigation }) => {
     property_type: "apartment",
     description: "",
   });
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   // Maintenance contacts are managed per unit, not at property level
 
   useEffect(() => {
     loadProperties();
+  }, []);
+
+  useEffect(() => {
+    // Listen for keyboard show/hide events
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -78,22 +101,52 @@ const PropertyManagementScreen = ({ navigation }) => {
       setLoading(true);
       setError(null);
 
-      const response = showDetailedView
-        ? await DataService.getDetailedProperties()
-        : await DataService.getProperties();
+      // Use regular properties endpoint (now includes payment data)
+      // For detailed view with units, try detailed properties endpoint
+      let response;
+      if (showDetailedView) {
+        try {
+          response = await DataService.getDetailedProperties();
+          if (!response.success) {
+            // Fallback to regular properties if detailed fails
+            response = await DataService.getProperties();
+          }
+        } catch (err) {
+          console.log("Detailed properties error, using regular properties:", err);
+          response = await DataService.getProperties();
+        }
+      } else {
+        response = await DataService.getProperties();
+      }
 
       if (response.success) {
         // Ensure we have an array of properties
         const propertiesData = Array.isArray(response.data)
           ? response.data
           : [];
-        setProperties(propertiesData);
+        
+        // Ensure all required fields exist with defaults
+        const enrichedProperties = propertiesData.map(property => ({
+          ...property,
+          total_payments: property.total_payments ?? 0,
+          current_month_payments: property.current_month_payments ?? 0,
+          pending_payments: property.pending_payments ?? 0,
+          occupied_units: property.occupied_units ?? 0,
+          total_units: property.total_units ?? 0,
+          units: property.units ?? [],
+        }));
+        
+        console.log(`Loaded ${enrichedProperties.length} properties`);
+        setProperties(enrichedProperties);
       } else {
+        console.error("Failed to load properties:", response.error);
         setError(response.error || "Failed to load properties");
+        setProperties([]);
       }
     } catch (err) {
       console.error("Properties load error:", err);
-      setError("Failed to load properties");
+      setError("Failed to load properties. Please try again.");
+      setProperties([]);
     } finally {
       setLoading(false);
     }
@@ -232,33 +285,91 @@ const PropertyManagementScreen = ({ navigation }) => {
     );
   };
 
-  const renderPropertyCard = (property) => (
-    <GradientCard
-      key={property.id}
-      variant="surface"
-      style={styles.propertyCard}
-    >
-      <View style={styles.propertyHeader}>
-        <View style={styles.propertyInfo}>
-          <Text style={styles.propertyName}>{property.name}</Text>
-          <Text style={styles.propertyLocation}>
-            {property.city}, {property.state}
-          </Text>
-          <Text style={styles.propertyType}>{property.property_type}</Text>
+  const renderPropertyCard = (property) => {
+    const occupiedUnits = property.occupied_units || 0;
+    const totalUnits = property.total_units || 0;
+    const vacantUnits = totalUnits - occupiedUnits;
+    
+    return (
+      <GradientCard
+        key={property.id}
+        variant="surface"
+        style={styles.propertyCard}
+      >
+        {/* Property Header */}
+        <View style={styles.propertyHeader}>
+          <View style={styles.propertyInfo}>
+            <Text style={styles.propertyName}>{property.name}</Text>
+            <View style={styles.propertyTypeBadge}>
+              <Text style={styles.propertyTypeText}>
+                {property.property_type?.toUpperCase() || 'PROPERTY'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.propertyStatsBadge}>
+            <Text style={styles.statValue}>{totalUnits}</Text>
+            <Text style={styles.statLabel}>Units</Text>
+          </View>
         </View>
-        <View style={styles.propertyStats}>
-          <Text style={styles.statValue}>{property.total_units}</Text>
-          <Text style={styles.statLabel}>Units</Text>
+
+        {/* Location Section */}
+        <View style={styles.propertyLocationSection}>
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={16} color={colors.textSecondary} />
+            <Text style={styles.propertyLocation}>
+              {property.city}, {property.state}
+            </Text>
+          </View>
+          {property.address && (
+            <View style={styles.locationRow}>
+              <Ionicons name="map" size={16} color={colors.textSecondary} />
+              <Text style={styles.propertyAddress}>{property.address}</Text>
+            </View>
+          )}
+          {property.pincode && (
+            <View style={styles.locationRow}>
+              <Ionicons name="pin" size={16} color={colors.textSecondary} />
+              <Text style={styles.propertyPincode}>{property.pincode}</Text>
+            </View>
+          )}
         </View>
-      </View>
 
-      <Text style={styles.propertyAddress}>{property.address}</Text>
+        {/* Stats Section */}
+        <View style={styles.propertyStatsSection}>
+          <View style={styles.statsHeader}>
+            <Text style={styles.statsTitle}>Property Statistics</Text>
+          </View>
+          <View style={styles.statsGrid}>
+            <View style={styles.statItem}>
+              <View style={[styles.statIconContainer, { backgroundColor: colors.primary + "20" }]}>
+                <Ionicons name="home" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.statItemValue}>{totalUnits}</Text>
+              <Text style={styles.statItemLabel}>Total Units</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statIconContainer, { backgroundColor: colors.success + "20" }]}>
+                <Ionicons name="person" size={20} color={colors.success} />
+              </View>
+              <Text style={styles.statItemValue}>{occupiedUnits}</Text>
+              <Text style={styles.statItemLabel}>Occupied</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statIconContainer, { backgroundColor: colors.warning + "20" }]}>
+                <Ionicons name="home-outline" size={20} color={colors.warning} />
+              </View>
+              <Text style={styles.statItemValue}>{vacantUnits}</Text>
+              <Text style={styles.statItemLabel}>Vacant</Text>
+            </View>
+          </View>
+        </View>
 
-      {/* Detailed View - Show Payment and Unit Information */}
-      {showDetailedView && (
-        <View style={styles.detailedInfo}>
-          {/* Payment Summary */}
-          <View style={styles.paymentSummary}>
+        {/* Payment Summary Section */}
+        <View style={styles.paymentSummarySection}>
+          <View style={styles.paymentSummaryHeader}>
+            <Text style={styles.paymentSummaryTitle}>Payment Summary</Text>
+          </View>
+          <View style={styles.paymentItems}>
             <View style={styles.paymentItem}>
               <Ionicons name="cash" size={16} color={colors.success} />
               <Text style={styles.paymentLabel}>Total Received</Text>
@@ -281,71 +392,80 @@ const PropertyManagementScreen = ({ navigation }) => {
               </Text>
             </View>
           </View>
+        </View>
 
-          {/* Unit Details */}
-          {property.units && property.units.length > 0 && (
-            <View style={styles.unitsSection}>
-              <Text style={styles.sectionTitle}>
+        {/* Unit Preview Section (if units exist) */}
+        {showDetailedView && property.units && property.units.length > 0 && (
+          <View style={styles.unitsPreviewSection}>
+            <View style={styles.unitsPreviewHeader}>
+              <Text style={styles.unitsPreviewTitle}>
                 Units ({property.units.length})
               </Text>
-              {property.units.slice(0, 3).map((unit) => (
-                <View key={unit.id} style={styles.unitItem}>
-                  <View style={styles.unitInfo}>
-                    <Text style={styles.unitNumber}>
-                      Unit {unit.unit_number}
-                    </Text>
-                    <Text style={styles.unitStatus}>{unit.status}</Text>
-                    {unit.tenant && (
-                      <Text style={styles.tenantName}>{unit.tenant.name}</Text>
-                    )}
-                  </View>
-                  <View style={styles.unitStats}>
-                    <Text style={styles.unitRent}>
-                      {formatCurrency(unit.rent_amount)}
-                    </Text>
-                    <Text style={styles.unitPayments}>
-                      {formatCurrency(unit.total_payments)}
+            </View>
+            {property.units.slice(0, 3).map((unit) => (
+              <View key={unit.id} style={styles.unitPreviewItem}>
+                <View style={styles.unitPreviewInfo}>
+                  <Ionicons name="cube" size={16} color={colors.primary} />
+                  <Text style={[styles.unitPreviewNumber, { marginLeft: spacing.xs }]}>
+                    Unit {unit.unit_number}
+                  </Text>
+                  <View style={[
+                    styles.unitStatusBadge,
+                    { 
+                      backgroundColor: unit.status === 'occupied' ? colors.success + "20" : colors.warning + "20",
+                      marginLeft: spacing.xs,
+                    }
+                  ]}>
+                    <Text style={[
+                      styles.unitStatusText,
+                      { color: unit.status === 'occupied' ? colors.success : colors.warning }
+                    ]}>
+                      {unit.status?.toUpperCase() || 'AVAILABLE'}
                     </Text>
                   </View>
                 </View>
-              ))}
-              {property.units.length > 3 && (
-                <Text style={styles.moreUnits}>
-                  +{property.units.length - 3} more units
+                <Text style={styles.unitPreviewRent}>
+                  {formatCurrency(unit.rent_amount)}
                 </Text>
-              )}
-            </View>
-          )}
+              </View>
+            ))}
+            {property.units.length > 3 && (
+              <Text style={styles.moreUnits}>
+                +{property.units.length - 3} more units
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.propertyActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate("UnitManagement", { property })}
+          >
+            <Ionicons name="grid" size={20} color={colors.primary} />
+            <Text style={styles.actionText}>Manage Units</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditProperty(property)}
+          >
+            <Ionicons name="create" size={20} color={colors.accent} />
+            <Text style={styles.actionText}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDeleteProperty(property)}
+          >
+            <Ionicons name="trash" size={20} color={colors.error} />
+            <Text style={styles.actionText}>Delete</Text>
+          </TouchableOpacity>
         </View>
-      )}
-
-      <View style={styles.propertyActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate("UnitManagement", { property })}
-        >
-          <Ionicons name="grid" size={20} color={colors.primary} />
-          <Text style={styles.actionText}>Manage Units</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEditProperty(property)}
-        >
-          <Ionicons name="create" size={20} color={colors.accent} />
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleDeleteProperty(property)}
-        >
-          <Ionicons name="trash" size={20} color={colors.error} />
-          <Text style={styles.actionText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </GradientCard>
-  );
+      </GradientCard>
+    );
+  };
 
   return (
     <LinearGradient
@@ -464,16 +584,22 @@ const PropertyManagementScreen = ({ navigation }) => {
             <View style={styles.placeholder} />
           </View>
 
-          <View style={styles.modalBody}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.modalBody}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+          >
             <ScrollView 
               style={styles.modalContent}
-              contentContainerStyle={styles.modalContentContainer}
+              contentContainerStyle={[
+                styles.modalContentContainer,
+                keyboardVisible && Platform.OS === "android" && { paddingBottom: 300 }
+              ]}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
-              bounces={true}
-              alwaysBounceVertical={false}
+              bounces={Platform.OS === "ios"}
               scrollEnabled={true}
             >
             <GradientCard variant="surface" style={styles.formCard}>
@@ -592,15 +718,9 @@ const PropertyManagementScreen = ({ navigation }) => {
               {/* Maintenance contacts removed from property form. Manage per unit in Unit Management. */}
             </GradientCard>
             {/* Add extra spacing at bottom to ensure button is accessible */}
-            <View style={{ height: spacing.xl }} />
+            <View style={{ height: keyboardVisible && Platform.OS === "android" ? spacing.xxl * 2 : spacing.xl * 2 }} />
           </ScrollView>
 
-          </View>
-          
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-          >
             <View style={styles.modalFooter}>
               <GradientButton
                 title={editingProperty ? "Update Property" : "Add Property"}
@@ -709,13 +829,12 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     marginBottom: spacing.lg,
-    padding: spacing.md,
   },
   propertyHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   propertyInfo: {
     flex: 1,
@@ -726,18 +845,27 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: spacing.xs,
   },
-  propertyLocation: {
-    ...typography.body2,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
+  propertyTypeBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + "20",
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: spacing.xs,
   },
-  propertyType: {
+  propertyTypeText: {
     ...typography.caption,
     color: colors.primary,
-    textTransform: "capitalize",
+    fontWeight: "600",
+    fontSize: 10,
   },
-  propertyStats: {
+  propertyStatsBadge: {
     alignItems: "center",
+    backgroundColor: colors.surfaceVariant,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    minWidth: 70,
   },
   statValue: {
     ...typography.h5,
@@ -747,26 +875,195 @@ const styles = StyleSheet.create({
   statLabel: {
     ...typography.caption,
     color: colors.textSecondary,
+    fontSize: 10,
+  },
+  propertyLocationSection: {
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  propertyLocation: {
+    ...typography.body2,
+    color: colors.text,
+    marginLeft: spacing.xs,
+    fontWeight: "500",
   },
   propertyAddress: {
     ...typography.body2,
-    color: colors.textLight,
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
+    flex: 1,
+  },
+  propertyPincode: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
+  },
+  propertyStatsSection: {
+    marginVertical: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  statsHeader: {
     marginBottom: spacing.md,
+  },
+  statsTitle: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  statsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+  },
+  statItemValue: {
+    ...typography.h6,
+    color: colors.text,
+    fontWeight: "bold",
+    marginBottom: spacing.xs,
+  },
+  statItemLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  paymentSummarySection: {
+    marginVertical: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  paymentSummaryHeader: {
+    marginBottom: spacing.sm,
+  },
+  paymentSummaryTitle: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  paymentItems: {
+    // Container for payment items
+  },
+  paymentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  paymentLabel: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    flex: 1,
+    marginLeft: spacing.xs,
+  },
+  paymentValue: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  unitsPreviewSection: {
+    marginVertical: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  unitsPreviewHeader: {
+    marginBottom: spacing.sm,
+  },
+  unitsPreviewTitle: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  unitPreviewItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    marginBottom: spacing.xs,
+  },
+  unitPreviewInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  unitPreviewNumber: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  unitStatusBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  unitStatusText: {
+    ...typography.caption,
+    fontWeight: "600",
+    fontSize: 9,
+  },
+  unitPreviewRent: {
+    ...typography.body2,
+    color: colors.text,
+    fontWeight: "600",
   },
   propertyActions: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    gap: spacing.sm,
   },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    minHeight: 44,
+    width: "48%",
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   actionText: {
     ...typography.body2,
     color: colors.text,
     marginLeft: spacing.xs,
+    fontWeight: "600",
+    fontSize: 12,
   },
   modalContainer: {
     flex: 1,
@@ -799,7 +1096,8 @@ const styles = StyleSheet.create({
   modalContentContainer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xxl, // Extra padding to ensure footer button is accessible when scrolling
+    paddingBottom: spacing.xxl,
+    flexGrow: 1,
   },
   formCard: {
     padding: spacing.lg,
@@ -859,9 +1157,10 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: Platform.OS === "android" ? spacing.xl : spacing.lg,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
+    borderTopColor: colors.borderLight,
   },
   maintenanceSection: {
     marginTop: spacing.md,
