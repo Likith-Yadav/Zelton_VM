@@ -1,12 +1,13 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { StatusBar } from "expo-status-bar";
 import { Provider as PaperProvider } from "react-native-paper";
 import Toast from "react-native-toast-message";
-import { Linking, Alert } from "react-native";
+import { Linking, Alert, View, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { paymentAPI } from "./src/services/api";
+import AuthService from "./src/services/authService";
 
 // Import screens
 import LandingScreen from "./src/screens/LandingScreen";
@@ -41,7 +42,12 @@ import { theme } from "./src/theme/theme";
 const Stack = createStackNavigator();
 
 export default function App() {
+  const [isTokenReady, setIsTokenReady] = useState(false);
+
   useEffect(() => {
+    // Initialize token verification on app startup
+    initializeApp();
+    
     // Handle deep links when app is already running
     const handleDeepLink = (url) => {
       console.log("Deep link received:", url);
@@ -68,6 +74,31 @@ export default function App() {
       linkingListener?.remove();
     };
   }, []);
+
+  // Initialize app and verify/refresh token on startup
+  const initializeApp = async () => {
+    try {
+      console.log("Initializing app - verifying token...");
+      const isLoggedIn = await AuthService.isLoggedIn();
+      
+      if (isLoggedIn) {
+        // Verify token is valid with backend
+        const tokenResult = await AuthService.verifyToken();
+        if (tokenResult.success) {
+          console.log("✅ Token verified successfully on app startup");
+        } else {
+          console.log("⚠️ Token invalid or expired, clearing storage");
+          await AuthService.clearUserData();
+        }
+      } else {
+        console.log("ℹ️ No existing session found");
+      }
+    } catch (error) {
+      console.error("Error initializing app:", error);
+    } finally {
+      setIsTokenReady(true);
+    }
+  };
 
   const handlePaymentCallback = async (url) => {
     try {
@@ -136,6 +167,15 @@ export default function App() {
       );
     }
   };
+
+  // Show loading screen while token is being verified
+  if (!isTokenReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
 
   return (
     <PaperProvider theme={theme}>

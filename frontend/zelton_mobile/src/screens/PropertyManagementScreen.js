@@ -9,6 +9,8 @@ import {
   Alert,
   TextInput,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -443,6 +445,7 @@ const PropertyManagementScreen = ({ navigation }) => {
         visible={showAddModal}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => setShowAddModal(false)}
       >
         <LinearGradient
           colors={gradients.background}
@@ -461,7 +464,18 @@ const PropertyManagementScreen = ({ navigation }) => {
             <View style={styles.placeholder} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <View style={styles.modalBody}>
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentContainer}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              bounces={true}
+              alwaysBounceVertical={false}
+              scrollEnabled={true}
+            >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Property Name *</Text>
               <TextInput
@@ -577,15 +591,24 @@ const PropertyManagementScreen = ({ navigation }) => {
 
               {/* Maintenance contacts removed from property form. Manage per unit in Unit Management. */}
             </GradientCard>
+            {/* Add extra spacing at bottom to ensure button is accessible */}
+            <View style={{ height: spacing.xl }} />
           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <GradientButton
-              title={editingProperty ? "Update Property" : "Add Property"}
-              onPress={handleSaveProperty}
-              loading={loading}
-            />
           </View>
+          
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+          >
+            <View style={styles.modalFooter}>
+              <GradientButton
+                title={editingProperty ? "Update Property" : "Add Property"}
+                onPress={handleSaveProperty}
+                loading={loading}
+              />
+            </View>
+          </KeyboardAvoidingView>
         </LinearGradient>
       </Modal>
     </LinearGradient>
@@ -767,9 +790,16 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  modalBody: {
+    flex: 1,
+  },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl, // Extra padding to ensure footer button is accessible when scrolling
   },
   formCard: {
     padding: spacing.lg,
@@ -829,6 +859,9 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
   },
   maintenanceSection: {
     marginTop: spacing.md,

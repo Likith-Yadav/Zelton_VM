@@ -67,6 +67,30 @@ const PaymentScreen = ({ navigation, route }) => {
       setIsProcessing(true);
       console.log("Starting PhonePe payment processing...");
 
+      // Ensure token is ready before making payment request
+      console.log("🔐 Validating token before subscription payment...");
+      const tokenCheck = await AuthService.ensureTokenReady();
+      if (!tokenCheck.success) {
+        console.error("❌ Token validation failed:", tokenCheck.error);
+        setIsProcessing(false);
+        setPaymentStatus("failed");
+        Alert.alert(
+          "Authentication Required",
+          tokenCheck.error || "Please login again to make a payment.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setPaymentStatus("idle");
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      console.log("✅ Token validated successfully, proceeding with subscription payment");
+
       // Initiate PhonePe subscription payment
       const isUpgrade = route.params?.isUpgrade || false;
       const response = await ownerSubscriptionAPI.initiateSubscriptionPayment(

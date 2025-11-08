@@ -269,6 +269,43 @@ class AuthService {
     }
   }
 
+  // Ensure token is ready and valid before making payment requests
+  async ensureTokenReady() {
+    try {
+      console.log("Ensuring token is ready...");
+      
+      // Check if token exists
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);
+      if (!token || token === "undefined" || token === "null" || token.trim() === "") {
+        console.log("⚠️ No token found");
+        return { success: false, error: "No authentication token found. Please login again." };
+      }
+
+      // Verify token is still valid
+      const tokenResult = await this.verifyToken();
+      if (tokenResult.success) {
+        console.log("✅ Token is valid and ready");
+        return { success: true };
+      } else {
+        console.log("⚠️ Token is invalid, attempting to refresh...");
+        // Token is invalid, user needs to login again
+        await this.clearUserData();
+        return { 
+          success: false, 
+          error: "Session expired. Please login again.",
+          requiresLogin: true 
+        };
+      }
+    } catch (error) {
+      console.error("Error ensuring token ready:", error);
+      return { 
+        success: false, 
+        error: "Authentication error. Please try again.",
+        requiresLogin: true 
+      };
+    }
+  }
+
   // Store user data
   async storeUserData(data) {
     try {

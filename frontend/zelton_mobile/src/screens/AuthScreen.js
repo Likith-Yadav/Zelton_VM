@@ -154,12 +154,21 @@ const AuthScreen = ({ navigation }) => {
           formData.password
         );
         if (result.success) {
-          Alert.alert("Success", "Login successful!");
-          // Navigate to appropriate dashboard based on role
-          if (result.data.role === "owner") {
-            navigation.navigate("OwnerDashboard");
+          // Verify token is ready immediately after login
+          console.log("✅ Login successful, verifying token...");
+          const tokenCheck = await AuthService.ensureTokenReady();
+          if (tokenCheck.success) {
+            console.log("✅ Token verified and ready");
+            Alert.alert("Success", "Login successful!");
+            // Navigate to appropriate dashboard based on role
+            if (result.data.role === "owner") {
+              navigation.navigate("OwnerDashboard");
+            } else {
+              navigation.navigate("TenantDashboard");
+            }
           } else {
-            navigation.navigate("TenantDashboard");
+            console.error("⚠️ Token verification failed after login");
+            Alert.alert("Error", "Login successful but token verification failed. Please try again.");
           }
         } else {
           // Check if property assignment is required for tenant

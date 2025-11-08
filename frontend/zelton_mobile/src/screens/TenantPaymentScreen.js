@@ -25,6 +25,7 @@ import {
 import { formatCurrency, formatDate } from "../utils/helpers";
 import DataService from "../services/dataService";
 import { paymentAPI } from "../services/api";
+import AuthService from "../services/authService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
 
@@ -139,6 +140,30 @@ const TenantPaymentScreen = ({ navigation, route }) => {
     try {
       setProcessingPayment(true);
       setPaymentStatus("processing");
+
+      // Ensure token is ready before making payment request
+      console.log("🔐 Validating token before payment...");
+      const tokenCheck = await AuthService.ensureTokenReady();
+      if (!tokenCheck.success) {
+        console.error("❌ Token validation failed:", tokenCheck.error);
+        setProcessingPayment(false);
+        setPaymentStatus("failed");
+        Alert.alert(
+          "Authentication Required",
+          tokenCheck.error || "Please login again to make a payment.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setPaymentStatus("idle");
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      console.log("✅ Token validated successfully, proceeding with payment");
 
       const amount = getPaymentAmount();
 
