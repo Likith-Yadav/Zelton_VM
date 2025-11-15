@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zeltonlivings.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,7 +36,7 @@
       }
     },
     "android": {
-      "package": "com.zeltonliving.mobile",
+      "package": "com.zeltonlivings.mobile",
       "compileSdkVersion": 35,
       "targetSdkVersion": 35,
       "versionCode": 1,
