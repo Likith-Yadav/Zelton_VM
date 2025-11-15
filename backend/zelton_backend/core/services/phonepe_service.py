@@ -11,7 +11,7 @@ from phonepe.sdk.pg.env import Env
 from phonepe.sdk.pg.common.exceptions import PhonePeException
 
 from core.models import Payment, OwnerPayment, PaymentTransaction
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +61,19 @@ class PhonePeService:
         return max(300, min(3600, seconds))
     
     @classmethod
-    def initiate_tenant_rent_payment(cls, tenant, unit, amount):
+    def initiate_tenant_rent_payment(cls, tenant, unit, base_amount, payment_charge=Decimal('0.00'), charge_rate_percent=Decimal('0.00')):
         """Initiate rent payment for tenant"""
         try:
             client = cls.get_client()
             merchant_order_id = cls.generate_merchant_order_id("RENT")
             
+            base_decimal = Decimal(str(base_amount))
+            charge_decimal = Decimal(str(payment_charge or 0))
+            total_amount = (base_decimal + charge_decimal).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            charge_rate_display = f"{charge_rate_percent.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)}%"
+            
             # Convert amount to paise
-            amount_paise = int(float(amount) * 100)
+            amount_paise = int((total_amount * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
             
             # Use configured redirect URL from settings (leave empty to avoid redirect after payment)
             # The app will poll for payment status instead of relying on redirect
@@ -78,7 +83,8 @@ class PhonePeService:
             meta_info = MetaInfo(
                 udf1=f"tenant_{tenant.id}",
                 udf2=f"unit_{unit.id}",
-                udf3="rent_payment"
+                udf3=f"Base: ₹{base_decimal} | Charge ({charge_rate_display}): ₹{charge_decimal}",
+                udf4=f"Total: ₹{total_amount}"
             )
             
             # Create payment request
@@ -100,7 +106,11 @@ class PhonePeService:
                 'order_id': response.order_id,
                 'redirect_url': response.redirect_url,  # Required to open PhonePe payment page
                 'expire_at': response.expire_at,
-                'state': response.state
+                'state': response.state,
+                'base_amount': float(base_decimal),
+                'payment_charge': float(charge_decimal),
+                'total_amount': float(total_amount),
+                'charge_rate_percent': float(charge_rate_percent)
             }
             
         except PhonePeException as e:

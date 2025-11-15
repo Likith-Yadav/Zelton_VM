@@ -28,10 +28,261 @@ import { ownerAPI } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
+const MOCK_PRICING_PLANS = [
+  {
+    id: "mock-plan-1",
+    name: "1-10 Houses",
+    min_units: 1,
+    max_units: 10,
+    monthly_price: 2500,
+    yearly_price: 27500,
+    features: [
+      "Up to 10 houses",
+      "Perfect for small property owners",
+      "Basic property management",
+      "Tenant management",
+      "Payment tracking",
+      "Email support",
+    ],
+  },
+  {
+    id: "mock-plan-2",
+    name: "11-20 Houses",
+    min_units: 11,
+    max_units: 20,
+    monthly_price: 5000,
+    yearly_price: 55000,
+    features: [
+      "Up to 20 houses",
+      "For growing property businesses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-3",
+    name: "21-30 Houses",
+    min_units: 21,
+    max_units: 30,
+    monthly_price: 7500,
+    yearly_price: 82500,
+    features: [
+      "Up to 30 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-4",
+    name: "31-40 Houses",
+    min_units: 31,
+    max_units: 40,
+    monthly_price: 10000,
+    yearly_price: 110000,
+    features: [
+      "Up to 40 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-5",
+    name: "41-50 Houses",
+    min_units: 41,
+    max_units: 50,
+    monthly_price: 12500,
+    yearly_price: 137500,
+    features: [
+      "Up to 50 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-6",
+    name: "51-60 Houses",
+    min_units: 51,
+    max_units: 60,
+    monthly_price: 15000,
+    yearly_price: 165000,
+    features: [
+      "Up to 60 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-7",
+    name: "61-70 Houses",
+    min_units: 61,
+    max_units: 70,
+    monthly_price: 17500,
+    yearly_price: 192500,
+    features: [
+      "Up to 70 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-8",
+    name: "71-80 Houses",
+    min_units: 71,
+    max_units: 80,
+    monthly_price: 20000,
+    yearly_price: 220000,
+    features: [
+      "Up to 80 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-9",
+    name: "81-90 Houses",
+    min_units: 81,
+    max_units: 90,
+    monthly_price: 22500,
+    yearly_price: 247500,
+    features: [
+      "Up to 90 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-10",
+    name: "91-100 Houses",
+    min_units: 91,
+    max_units: 100,
+    monthly_price: 25000,
+    yearly_price: 275000,
+    features: [
+      "Up to 100 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-11",
+    name: "101-110 Houses",
+    min_units: 101,
+    max_units: 110,
+    monthly_price: 27500,
+    yearly_price: 302500,
+    features: [
+      "Up to 110 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-12",
+    name: "111-120 Houses",
+    min_units: 111,
+    max_units: 120,
+    monthly_price: 30000,
+    yearly_price: 330000,
+    features: [
+      "Up to 120 houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support",
+    ],
+  },
+  {
+    id: "mock-plan-13",
+    name: "121+ Houses",
+    min_units: 121,
+    max_units: 999999,
+    monthly_price: 32500,
+    yearly_price: 357500,
+    features: [
+      "Unlimited houses",
+      "Advanced property management",
+      "Tenant management",
+      "Payment tracking",
+      "Analytics dashboard",
+      "Automated reports",
+      "API access",
+      "Custom integrations",
+      "Dedicated account manager",
+      "White-label options",
+      "Priority support",
+    ],
+  },
+];
+
 const PricingScreen = ({ navigation, route }) => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [billingCycle, setBillingCycle] = useState("monthly"); // 'monthly' or 'yearly'
-  const [propertyCount, setPropertyCount] = useState("1-20");
+  const [propertyCount, setPropertyCount] = useState("1-10");
   const [pricingPlans, setPricingPlans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [scrollY] = useState(new Animated.Value(0));
@@ -42,20 +293,34 @@ const PricingScreen = ({ navigation, route }) => {
   // Convert property count range to numeric value for comparison
   const getPropertyCountValue = (count) => {
     switch (count) {
-      case "1-20":
-        return 10; // Use middle value
-      case "21-40":
-        return 30;
-      case "41-60":
-        return 50;
-      case "61-80":
-        return 70;
-      case "81-100":
-        return 90;
-      case "100+":
-        return 150; // Use a high value for 100+
+      case "1-10":
+        return 5;
+      case "11-20":
+        return 15;
+      case "21-30":
+        return 25;
+      case "31-40":
+        return 35;
+      case "41-50":
+        return 45;
+      case "51-60":
+        return 55;
+      case "61-70":
+        return 65;
+      case "71-80":
+        return 75;
+      case "81-90":
+        return 85;
+      case "91-100":
+        return 95;
+      case "101-110":
+        return 105;
+      case "111-120":
+        return 115;
+      case "121+":
+        return 130; // Use a high value for 121+
       default:
-        return 10;
+        return 5;
     }
   };
 
@@ -144,7 +409,7 @@ const PricingScreen = ({ navigation, route }) => {
       } else {
         console.error("Invalid pricing plans data:", data);
         // Use mock data instead of showing error
-        setPricingPlans(mockPricingPlans);
+        setPricingPlans(MOCK_PRICING_PLANS);
       }
     } catch (error) {
       console.error("Error loading pricing plans:", error);
@@ -449,7 +714,21 @@ const PricingScreen = ({ navigation, route }) => {
           How many properties do you have?
         </Text>
         <View style={styles.propertyCountButtons}>
-          {["1-20", "21-40", "41-60", "61-80", "81-100", "100+"].map(
+          {[
+            "1-10",
+            "11-20",
+            "21-30",
+            "31-40",
+            "41-50",
+            "51-60",
+            "61-70",
+            "71-80",
+            "81-90",
+            "91-100",
+            "101-110",
+            "111-120",
+            "121+",
+          ].map(
             (count) => (
               <TouchableOpacity
                 key={count}
@@ -482,7 +761,7 @@ const PricingScreen = ({ navigation, route }) => {
           )}
         </View>
         <Text style={styles.pricingNote}>
-          Price increases by ₹2,000 for every 20 houses
+          Price increases by ₹2,500 for every 10 houses
         </Text>
       </View>
 

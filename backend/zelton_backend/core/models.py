@@ -360,6 +360,7 @@ class Payment(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='payments')
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_gateway_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE)
     status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='pending')
     payment_date = models.DateTimeField(null=True, blank=True)
@@ -373,6 +374,12 @@ class Payment(models.Model):
     
     def __str__(self):
         return f"Payment {self.id} - {self.tenant.user.email} - ₹{self.amount}"
+    
+    @property
+    def total_amount(self):
+        """Total amount charged to tenant including gateway fees"""
+        charge = self.payment_gateway_charge or 0
+        return (self.amount or 0) + charge
     
     @classmethod
     def calculate_monthly_due(cls, tenant, unit):

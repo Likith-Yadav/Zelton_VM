@@ -45,12 +45,12 @@ Features:
     "message": "You cannot downgrade to a plan with fewer units. Please contact our sales team at sales@zelton.in for assistance.",
     "contact_email": "sales@zelton.in",
     "current_plan": {
-        "name": "Growth Plan",
-        "max_units": 40
+        "name": "11-20 Houses",
+        "max_units": 20
     },
     "requested_plan": {
-        "name": "Starter Plan", 
-        "max_units": 20
+        "name": "1-10 Houses", 
+        "max_units": 10
     }
 }
 ```

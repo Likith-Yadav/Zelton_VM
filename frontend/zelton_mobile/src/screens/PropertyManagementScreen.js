@@ -48,8 +48,10 @@ const PropertyManagementScreen = ({ navigation }) => {
   });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [focusedInput, setFocusedInput] = useState(null);
   const scrollViewRef = React.useRef(null);
   const inputRefs = React.useRef({});
+  const descriptionInputY = React.useRef(0);
   // Maintenance contacts are managed per unit, not at property level
 
   useEffect(() => {
@@ -63,6 +65,22 @@ const PropertyManagementScreen = ({ navigation }) => {
       (e) => {
         setKeyboardVisible(true);
         setKeyboardHeight(e.endCoordinates.height);
+        // If description field is focused, scroll to it when keyboard appears
+        if (focusedInput === "description") {
+          setTimeout(() => {
+            if (scrollViewRef.current) {
+              if (descriptionInputY.current > 0) {
+                const scrollTo = Math.max(0, descriptionInputY.current - 200);
+                scrollViewRef.current.scrollTo({
+                  y: scrollTo,
+                  animated: true,
+                });
+              } else {
+                scrollViewRef.current.scrollToEnd({ animated: true });
+              }
+            }
+          }, Platform.OS === "android" ? 100 : 50);
+        }
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
@@ -79,18 +97,55 @@ const PropertyManagementScreen = ({ navigation }) => {
     };
   }, []);
 
-  // Scroll to input when focused - scroll to end for last inputs
+  // Track input position when layout changes
+  const handleInputLayout = (inputName, event) => {
+    if (inputName === "description") {
+      const { y, height } = event.nativeEvent.layout;
+      descriptionInputY.current = y;
+    }
+  };
+
+  // Scroll to input when focused - ensure input is visible above keyboard
   const handleInputFocus = (inputName) => {
-    if (Platform.OS === "android" && scrollViewRef.current) {
-      // For last inputs (pincode, description), scroll to end
-      if (inputName === "pincode" || inputName === "description") {
+    setFocusedInput(inputName);
+    if (scrollViewRef.current) {
+      if (inputName === "description") {
+        // Wait for keyboard to appear, then scroll to description field
+        // Use longer delay on Android to ensure keyboard is fully shown
+        const scrollDelay = Platform.OS === "android" ? 500 : 300;
+        setTimeout(() => {
+          if (scrollViewRef.current) {
+            // First ensure we can scroll
+            scrollViewRef.current.scrollToEnd({ animated: false });
+            // Then scroll to position if we have it, otherwise just scroll to end
+            setTimeout(() => {
+              if (scrollViewRef.current && descriptionInputY.current > 0) {
+                // Scroll to description field position with generous padding for keyboard
+                const scrollTo = Math.max(0, descriptionInputY.current - 200);
+                scrollViewRef.current.scrollTo({
+                  y: scrollTo,
+                  animated: true,
+                });
+              } else if (scrollViewRef.current) {
+                // Fallback: scroll to end
+                scrollViewRef.current.scrollToEnd({ animated: true });
+              }
+            }, 100);
+          }
+        }, scrollDelay);
+      } else if (inputName === "pincode") {
+        // For pincode, scroll to end
         setTimeout(() => {
           if (scrollViewRef.current) {
             scrollViewRef.current.scrollToEnd({ animated: true });
           }
-        }, 300);
+        }, Platform.OS === "android" ? 300 : 100);
       }
     }
+  };
+
+  const handleInputBlur = () => {
+    setFocusedInput(null);
   };
 
   useEffect(() => {
@@ -392,22 +447,26 @@ const PropertyManagementScreen = ({ navigation }) => {
             <View style={styles.paymentItem}>
               <Ionicons name="cash" size={16} color={colors.success} />
               <Text style={styles.paymentLabel}>Total Received</Text>
-              <Text style={styles.paymentValue}>
-                {formatCurrency(property.total_payments || 0)}
+              <Text style={[styles.paymentValue, { color: colors.success }]}>
+                {formatCurrency(Number(property.total_payments) || 0)}
               </Text>
             </View>
             <View style={styles.paymentItem}>
               <Ionicons name="calendar" size={16} color={colors.primary} />
               <Text style={styles.paymentLabel}>This Month</Text>
-              <Text style={styles.paymentValue}>
-                {formatCurrency(property.current_month_payments || 0)}
+              <Text style={[styles.paymentValue, { color: colors.primary }]}>
+                {formatCurrency(Number(property.current_month_payments) || 0)}
               </Text>
             </View>
             <View style={styles.paymentItem}>
               <Ionicons name="time" size={16} color={colors.warning} />
               <Text style={styles.paymentLabel}>Pending</Text>
-              <Text style={styles.paymentValue}>
-                {formatCurrency(property.pending_payments || 0)}
+              <Text style={[styles.paymentValue, { color: colors.warning }]}>
+                {formatCurrency(
+                  property.pending_payments !== null && property.pending_payments !== undefined
+                    ? Number(property.pending_payments) || 0
+                    : 0
+                )}
               </Text>
             </View>
           </View>
@@ -604,9 +663,10 @@ const PropertyManagementScreen = ({ navigation }) => {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.modalBody}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+            enabled={Platform.OS === "ios"}
           >
             <ScrollView 
               ref={scrollViewRef}
@@ -615,7 +675,7 @@ const PropertyManagementScreen = ({ navigation }) => {
                 styles.modalContentContainer,
                 {
                   paddingBottom: Platform.OS === "android" && keyboardVisible 
-                    ? Math.max(keyboardHeight + 100, 400) 
+                    ? Math.max(keyboardHeight + 200, 600) 
                     : spacing.xxl * 2
                 }
               ]}
@@ -626,6 +686,7 @@ const PropertyManagementScreen = ({ navigation }) => {
               bounces={Platform.OS === "ios"}
               scrollEnabled={true}
               automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+              scrollEventThrottle={16}
             >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Property Name *</Text>
@@ -730,22 +791,28 @@ const PropertyManagementScreen = ({ navigation }) => {
               </View>
 
               <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                ref={(ref) => (inputRefs.current.description = ref)}
-                style={[styles.textInput, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) => {
-                  if (text.length <= 100) {
-                    setFormData({ ...formData, description: text });
-                  }
-                }}
-                onFocus={() => handleInputFocus("description")}
-                placeholder="Enter property description (optional)"
-                placeholderTextColor={colors.textLight}
-                multiline
-                numberOfLines={4}
-                maxLength={100}
-              />
+              <View
+                onLayout={(event) => handleInputLayout("description", event)}
+              >
+                <TextInput
+                  ref={(ref) => (inputRefs.current.description = ref)}
+                  style={[styles.textInput, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) => {
+                    if (text.length <= 100) {
+                      setFormData({ ...formData, description: text });
+                    }
+                  }}
+                  onFocus={() => handleInputFocus("description")}
+                  onBlur={handleInputBlur}
+                  placeholder="Enter property description (optional)"
+                  placeholderTextColor={colors.textLight}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={100}
+                  textAlignVertical="top"
+                />
+              </View>
               <Text style={styles.characterCount}>
                 {formData.description.length}/100 characters
               </Text>
@@ -1019,6 +1086,10 @@ const styles = StyleSheet.create({
     ...typography.body1,
     color: colors.text,
     fontWeight: "600",
+    textAlign: "right",
+    flexShrink: 0,
+    marginLeft: spacing.xs,
+    minWidth: 80,
   },
   unitsPreviewSection: {
     marginVertical: spacing.md,

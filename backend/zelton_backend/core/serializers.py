@@ -331,6 +331,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     reconciliation_status = serializers.SerializerMethodField()
     payout_status = serializers.SerializerMethodField()
     payout_message = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
     
     def get_reconciliation_status(self, obj):
         """Get reconciliation status from related transaction"""
@@ -364,11 +365,15 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id', 'tenant', 'tenant_name', 'unit', 'unit_number', 'property_name',
-            'amount', 'payment_type', 'status', 'payment_date', 'due_date',
+            'amount', 'payment_gateway_charge', 'total_amount',
+            'payment_type', 'status', 'payment_date', 'due_date',
             'merchant_order_id', 'phonepe_transaction_id', 'phonepe_payment_id', 'phonepe_order_id',
             'reconciliation_status', 'payout_status', 'payout_message', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_total_amount(self, obj):
+        return obj.total_amount
 
 
 class PaymentProofSerializer(serializers.ModelSerializer):

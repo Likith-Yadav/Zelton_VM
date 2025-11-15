@@ -14,14 +14,14 @@ class Command(BaseCommand):
         # Define pricing plans based on units (not properties)
         pricing_plans = [
             {
-                'name': '1-20 Houses',
+                'name': '1-10 Houses',
                 'min_units': 1,
-                'max_units': 20,
-                'monthly_price': Decimal('2000.00'),
-                'yearly_price': Decimal('22000.00'),
+                'max_units': 10,
+                'monthly_price': Decimal('2500.00'),
+                'yearly_price': Decimal('27500.00'),
                 'features': [
-                    'Up to 20 houses',
-                    'Perfect for small to medium property owners',
+                    'Up to 10 houses',
+                    'Perfect for small property owners',
                     'Basic property management',
                     'Tenant management',
                     'Payment tracking',
@@ -29,13 +29,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': '21-40 Houses',
-                'min_units': 21,
-                'max_units': 40,
-                'monthly_price': Decimal('4000.00'),
-                'yearly_price': Decimal('44000.00'),
+                'name': '11-20 Houses',
+                'min_units': 11,
+                'max_units': 20,
+                'monthly_price': Decimal('5000.00'),
+                'yearly_price': Decimal('55000.00'),
                 'features': [
-                    'Up to 40 houses',
+                    'Up to 20 houses',
                     'For growing property businesses',
                     'Advanced property management',
                     'Tenant management',
@@ -45,13 +45,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': '41-60 Houses',
-                'min_units': 41,
-                'max_units': 60,
-                'monthly_price': Decimal('6000.00'),
-                'yearly_price': Decimal('66000.00'),
+                'name': '21-30 Houses',
+                'min_units': 21,
+                'max_units': 30,
+                'monthly_price': Decimal('7500.00'),
+                'yearly_price': Decimal('82500.00'),
                 'features': [
-                    'Up to 60 houses',
+                    'Up to 30 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -61,13 +61,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': '61-80 Houses',
-                'min_units': 61,
-                'max_units': 80,
-                'monthly_price': Decimal('8000.00'),
-                'yearly_price': Decimal('88000.00'),
+                'name': '31-40 Houses',
+                'min_units': 31,
+                'max_units': 40,
+                'monthly_price': Decimal('10000.00'),
+                'yearly_price': Decimal('110000.00'),
                 'features': [
-                    'Up to 80 houses',
+                    'Up to 40 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -78,13 +78,13 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': '81-100 Houses',
-                'min_units': 81,
-                'max_units': 100,
-                'monthly_price': Decimal('10000.00'),
-                'yearly_price': Decimal('110000.00'),
+                'name': '41-50 Houses',
+                'min_units': 41,
+                'max_units': 50,
+                'monthly_price': Decimal('12500.00'),
+                'yearly_price': Decimal('137500.00'),
                 'features': [
-                    'Up to 100 houses',
+                    'Up to 50 houses',
                     'Advanced property management',
                     'Tenant management',
                     'Payment tracking',
@@ -96,11 +96,125 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'name': '101-120 Houses',
+                'name': '51-60 Houses',
+                'min_units': 51,
+                'max_units': 60,
+                'monthly_price': Decimal('15000.00'),
+                'yearly_price': Decimal('165000.00'),
+                'features': [
+                    'Up to 60 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '61-70 Houses',
+                'min_units': 61,
+                'max_units': 70,
+                'monthly_price': Decimal('17500.00'),
+                'yearly_price': Decimal('192500.00'),
+                'features': [
+                    'Up to 70 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '71-80 Houses',
+                'min_units': 71,
+                'max_units': 80,
+                'monthly_price': Decimal('20000.00'),
+                'yearly_price': Decimal('220000.00'),
+                'features': [
+                    'Up to 80 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '81-90 Houses',
+                'min_units': 81,
+                'max_units': 90,
+                'monthly_price': Decimal('22500.00'),
+                'yearly_price': Decimal('247500.00'),
+                'features': [
+                    'Up to 90 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '91-100 Houses',
+                'min_units': 91,
+                'max_units': 100,
+                'monthly_price': Decimal('25000.00'),
+                'yearly_price': Decimal('275000.00'),
+                'features': [
+                    'Up to 100 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '101-110 Houses',
                 'min_units': 101,
+                'max_units': 110,
+                'monthly_price': Decimal('27500.00'),
+                'yearly_price': Decimal('302500.00'),
+                'features': [
+                    'Up to 110 houses',
+                    'Advanced property management',
+                    'Tenant management',
+                    'Payment tracking',
+                    'Analytics dashboard',
+                    'Automated reports',
+                    'API access',
+                    'Custom integrations',
+                    'Dedicated account manager',
+                    'Priority support'
+                ]
+            },
+            {
+                'name': '111-120 Houses',
+                'min_units': 111,
                 'max_units': 120,
-                'monthly_price': Decimal('12000.00'),
-                'yearly_price': Decimal('132000.00'),
+                'monthly_price': Decimal('30000.00'),
+                'yearly_price': Decimal('330000.00'),
                 'features': [
                     'Up to 120 houses',
                     'Advanced property management',
@@ -118,8 +232,8 @@ class Command(BaseCommand):
                 'name': '121+ Houses',
                 'min_units': 121,
                 'max_units': 999999,  # Unlimited
-                'monthly_price': Decimal('14000.00'),
-                'yearly_price': Decimal('154000.00'),
+                'monthly_price': Decimal('32500.00'),
+                'yearly_price': Decimal('357500.00'),
                 'features': [
                     'Unlimited houses',
                     'Advanced property management',

@@ -72,8 +72,10 @@ const UnitManagementScreen = ({ navigation, route }) => {
   const [showPropertySelector, setShowPropertySelector] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [focusedInput, setFocusedInput] = useState(null);
   const maintenanceScrollViewRef = React.useRef(null);
   const unitScrollViewRef = React.useRef(null);
+  const descriptionInputY = React.useRef(0);
 
   useEffect(() => {
     if (property) {
@@ -93,6 +95,22 @@ const UnitManagementScreen = ({ navigation, route }) => {
       (e) => {
         setKeyboardVisible(true);
         setKeyboardHeight(e.endCoordinates.height);
+        // If description field is focused, scroll to it when keyboard appears
+        if (focusedInput === "description") {
+          setTimeout(() => {
+            if (unitScrollViewRef.current) {
+              if (descriptionInputY.current > 0) {
+                const scrollTo = Math.max(0, descriptionInputY.current - 200);
+                unitScrollViewRef.current.scrollTo({
+                  y: scrollTo,
+                  animated: true,
+                });
+              } else {
+                unitScrollViewRef.current.scrollToEnd({ animated: true });
+              }
+            }
+          }, Platform.OS === "android" ? 100 : 50);
+        }
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
@@ -107,7 +125,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, []);
+  }, [focusedInput]);
 
   // Scroll to end when keyboard appears for maintenance contact inputs
   const handleMaintenanceInputFocus = () => {
@@ -120,18 +138,54 @@ const UnitManagementScreen = ({ navigation, route }) => {
     }
   };
 
+  // Track input position when layout changes
+  const handleUnitInputLayout = (inputName, event) => {
+    if (inputName === "description") {
+      const { y, height } = event.nativeEvent.layout;
+      descriptionInputY.current = y;
+    }
+  };
+
   // Scroll to end when keyboard appears for unit inputs
   const handleUnitInputFocus = (inputName) => {
-    if (Platform.OS === "android" && unitScrollViewRef.current) {
-      // For last inputs, scroll to end
-      if (inputName === "area_sqft" || inputName === "description" || inputName === "rent_due_date") {
+    setFocusedInput(inputName);
+    if (unitScrollViewRef.current) {
+      if (inputName === "description") {
+        // Wait for keyboard to appear, then scroll to description field
+        const scrollDelay = Platform.OS === "android" ? 500 : 300;
+        setTimeout(() => {
+          if (unitScrollViewRef.current) {
+            // First ensure we can scroll
+            unitScrollViewRef.current.scrollToEnd({ animated: false });
+            // Then scroll to position if we have it, otherwise just scroll to end
+            setTimeout(() => {
+              if (unitScrollViewRef.current && descriptionInputY.current > 0) {
+                // Scroll to description field position with generous padding for keyboard
+                const scrollTo = Math.max(0, descriptionInputY.current - 200);
+                unitScrollViewRef.current.scrollTo({
+                  y: scrollTo,
+                  animated: true,
+                });
+              } else if (unitScrollViewRef.current) {
+                // Fallback: scroll to end
+                unitScrollViewRef.current.scrollToEnd({ animated: true });
+              }
+            }, 100);
+          }
+        }, scrollDelay);
+      } else if (inputName === "area_sqft" || inputName === "rent_due_date") {
+        // For other last inputs, scroll to end
         setTimeout(() => {
           if (unitScrollViewRef.current) {
             unitScrollViewRef.current.scrollToEnd({ animated: true });
           }
-        }, 300);
+        }, Platform.OS === "android" ? 300 : 100);
       }
     }
+  };
+
+  const handleUnitInputBlur = () => {
+    setFocusedInput(null);
   };
 
   useEffect(() => {
@@ -1006,9 +1060,10 @@ const UnitManagementScreen = ({ navigation, route }) => {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.modalBody}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+            enabled={Platform.OS === "ios"}
           >
             <ScrollView 
               ref={unitScrollViewRef}
@@ -1017,7 +1072,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
                 styles.modalContentContainer,
                 {
                   paddingBottom: Platform.OS === "android" && keyboardVisible 
-                    ? Math.max(keyboardHeight + 150, 450) 
+                    ? Math.max(keyboardHeight + 200, 600) 
                     : spacing.xxl * 2
                 }
               ]}
@@ -1028,6 +1083,7 @@ const UnitManagementScreen = ({ navigation, route }) => {
               bounces={Platform.OS === "ios"}
               scrollEnabled={true}
               automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+              scrollEventThrottle={16}
             >
             <GradientCard variant="surface" style={styles.formCard}>
               <Text style={styles.inputLabel}>Unit Number *</Text>
@@ -1139,21 +1195,27 @@ const UnitManagementScreen = ({ navigation, route }) => {
               </View>
 
               <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={formData.description}
-                onChangeText={(text) => {
-                  if (text.length <= 100) {
-                    setFormData({ ...formData, description: text });
-                  }
-                }}
-                onFocus={() => handleUnitInputFocus("description")}
-                placeholder="Enter unit description (optional)"
-                placeholderTextColor={colors.textLight}
-                multiline
-                numberOfLines={3}
-                maxLength={100}
-              />
+              <View
+                onLayout={(event) => handleUnitInputLayout("description", event)}
+              >
+                <TextInput
+                  style={[styles.textInput, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) => {
+                    if (text.length <= 100) {
+                      setFormData({ ...formData, description: text });
+                    }
+                  }}
+                  onFocus={() => handleUnitInputFocus("description")}
+                  onBlur={handleUnitInputBlur}
+                  placeholder="Enter unit description (optional)"
+                  placeholderTextColor={colors.textLight}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={100}
+                  textAlignVertical="top"
+                />
+              </View>
               <Text style={styles.characterCount}>
                 {formData.description.length}/100 characters
               </Text>

@@ -192,13 +192,20 @@ npm run web        # Web browser
 - Payment verification and callbacks
 
 ### Pricing Structure:
-- 1-20 houses: ₹2,000/month
-- 21-40 houses: ₹4,000/month
-- 41-60 houses: ₹6,000/month
-- 61-80 houses: ₹8,000/month
-- 81-100 houses: ₹10,000/month
-- 101-120 houses: ₹12,000/month
-- 121+ houses: ₹14,000+/month
+- 1-10 houses: ₹2,500/month
+- 11-20 houses: ₹5,000/month
+- 21-30 houses: ₹7,500/month
+- 31-40 houses: ₹10,000/month
+- 41-50 houses: ₹12,500/month
+- 51-60 houses: ₹15,000/month
+- 61-70 houses: ₹17,500/month
+- 71-80 houses: ₹20,000/month
+- 81-90 houses: ₹22,500/month
+- 91-100 houses: ₹25,000/month
+- 101-110 houses: ₹27,500/month
+- 111-120 houses: ₹30,000/month
+- 121+ houses: ₹32,500+/month
+- Yearly billing: 1 month free (pay for 11 months)
 
 ## 🚀 Running the Complete App
 

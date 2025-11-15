@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,7 @@ const TenantPaymentScreen = ({ navigation, route }) => {
   const [paymentStatus, setPaymentStatus] = useState("idle"); // idle, processing, success, failed
   const [remainingAmount, setRemainingAmount] = useState(0);
   const [alreadyPaidThisMonth, setAlreadyPaidThisMonth] = useState(0);
+  const [latestPaymentBreakup, setLatestPaymentBreakup] = useState(null);
 
   useEffect(() => {
     loadPaymentData();
@@ -92,6 +93,56 @@ const TenantPaymentScreen = ({ navigation, route }) => {
       return parseFloat(customAmount) || 0;
     }
     return 0;
+  };
+
+  const calculatePaymentBreakup = (amountValue) => {
+    const baseAmount = Number(amountValue || 0);
+    if (!baseAmount || baseAmount <= 0) {
+      return {
+        baseAmount: 0,
+        chargeRate: 0,
+        chargeAmount: 0,
+        totalAmount: 0,
+      };
+    }
+
+    const rate = baseAmount <= 10000 ? 0.02 : 0.025;
+    const chargeAmount = parseFloat((baseAmount * rate).toFixed(2));
+    const totalAmount = parseFloat((baseAmount + chargeAmount).toFixed(2));
+
+    return {
+      baseAmount,
+      chargeRate: parseFloat((rate * 100).toFixed(2)),
+      chargeAmount,
+      totalAmount,
+    };
+  };
+
+  const paymentBreakup = useMemo(
+    () => calculatePaymentBreakup(getPaymentAmount()),
+    [selectedAmount, customAmount, remainingAmount]
+  );
+
+  const normalizeBreakup = (breakup) => {
+    if (!breakup) {
+      return calculatePaymentBreakup(0);
+    }
+
+    if (typeof breakup.baseAmount !== "undefined") {
+      return {
+        baseAmount: Number(breakup.baseAmount ?? 0),
+        chargeAmount: Number(breakup.chargeAmount ?? 0),
+        chargeRate: Number(breakup.chargeRate ?? 0),
+        totalAmount: Number(breakup.totalAmount ?? 0),
+      };
+    }
+
+    return {
+      baseAmount: Number(breakup.base_amount ?? 0),
+      chargeAmount: Number(breakup.payment_charge ?? 0),
+      chargeRate: Number(breakup.charge_rate_percent ?? 0),
+      totalAmount: Number(breakup.total_payable ?? 0),
+    };
   };
 
   // Remaining amount is fetched from backend only, no frontend calculations
@@ -165,7 +216,8 @@ const TenantPaymentScreen = ({ navigation, route }) => {
 
       console.log("✅ Token validated successfully, proceeding with payment");
 
-      const amount = getPaymentAmount();
+      const localBreakup = normalizeBreakup(paymentBreakup);
+      const amount = localBreakup.baseAmount;
 
       // Initiate PhonePe payment
       console.log(`=== FRONTEND PAYMENT DEBUG ===`);
@@ -181,6 +233,11 @@ const TenantPaymentScreen = ({ navigation, route }) => {
 
       if (response.data.success) {
         const { redirect_url, merchant_order_id, order_id } = response.data;
+        const backendBreakup = response.data.payment_breakup
+          ? normalizeBreakup(response.data.payment_breakup)
+          : localBreakup;
+
+        setLatestPaymentBreakup(backendBreakup);
 
         // Store payment data for callback handling
         await AsyncStorage.setItem(
@@ -188,7 +245,9 @@ const TenantPaymentScreen = ({ navigation, route }) => {
           JSON.stringify({
             merchant_order_id,
             order_id,
-            amount,
+            amount: backendBreakup.totalAmount,
+            base_amount: backendBreakup.baseAmount,
+            payment_charge: backendBreakup.chargeAmount,
             payment_type: "rent",
           })
         );
@@ -202,7 +261,7 @@ const TenantPaymentScreen = ({ navigation, route }) => {
           setPaymentStatus("processing");
 
           // Start polling for payment status
-          pollPaymentStatus(merchant_order_id);
+          pollPaymentStatus(merchant_order_id, backendBreakup);
         } else {
           throw new Error("Cannot open PhonePe payment page");
         }
@@ -249,10 +308,13 @@ const TenantPaymentScreen = ({ navigation, route }) => {
     }
   };
 
-  const pollPaymentStatus = async (merchantOrderId) => {
+  const pollPaymentStatus = async (merchantOrderId, breakupData = null) => {
     try {
       const maxAttempts = 20; // Poll for 10 minutes (20 * 30 seconds)
       let attempts = 0;
+      const effectiveBreakup = breakupData
+        ? normalizeBreakup(breakupData)
+        : latestPaymentBreakup || normalizeBreakup(paymentBreakup);
 
       const pollInterval = setInterval(async () => {
         attempts++;
@@ -270,15 +332,20 @@ const TenantPaymentScreen = ({ navigation, route }) => {
               setPaymentStatus("success");
 
               // Store payment data locally
-              await storePaymentData(getPaymentAmount(), response.data);
+              await storePaymentData(effectiveBreakup, response.data);
 
               // Show success message
               setTimeout(() => {
+                const totalPaid = formatCurrency(effectiveBreakup.totalAmount);
+                const chargeNote =
+                  effectiveBreakup.chargeAmount > 0
+                    ? ` (includes ${formatCurrency(
+                        effectiveBreakup.chargeAmount
+                      )} PhonePe charges)`
+                    : "";
                 Alert.alert(
                   "Payment Successful!",
-                  `Your payment of ${formatCurrency(
-                    getPaymentAmount()
-                  )} has been processed successfully.`,
+                  `Your payment of ${totalPaid}${chargeNote} has been processed successfully.`,
                   [
                     {
                       text: "OK",
@@ -328,8 +395,13 @@ const TenantPaymentScreen = ({ navigation, route }) => {
     }
   };
 
-  const storePaymentData = async (amount, backendData = null) => {
+  const storePaymentData = async (breakup, backendData = null) => {
     try {
+      const normalizedBreakup = normalizeBreakup(breakup);
+      const baseAmount = normalizedBreakup.baseAmount;
+      const totalAmount = normalizedBreakup.totalAmount;
+      const chargeAmount = normalizedBreakup.chargeAmount;
+
       // Store payment data locally for history only
       // Remaining amount calculations are handled by backend
       const existingPayments = await AsyncStorage.getItem(
@@ -341,7 +413,9 @@ const TenantPaymentScreen = ({ navigation, route }) => {
       // Create new payment record
       const newPayment = {
         id: backendData?.payment?.id || Date.now(),
-        amount: amount,
+        amount: baseAmount,
+        total_amount: totalAmount,
+        payment_charge: chargeAmount,
         payment_date:
           backendData?.payment?.payment_date || new Date().toISOString(),
         status: "completed",
@@ -422,16 +496,40 @@ const TenantPaymentScreen = ({ navigation, route }) => {
             </View>
 
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Payment Amount:</Text>
+              <Text style={styles.summaryLabel}>Rent Amount:</Text>
               <Text
                 style={[
                   styles.summaryValue,
                   { color: colors.primary, fontWeight: "bold" },
                 ]}
               >
-                {formatCurrency(getPaymentAmount())}
+                {formatCurrency(paymentBreakup.baseAmount)}
               </Text>
             </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                PhonePe Charges ({paymentBreakup.chargeRate.toFixed(2)}%):
+              </Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(paymentBreakup.chargeAmount)}
+              </Text>
+            </View>
+
+            <View style={[styles.summaryRow, styles.summaryTotalRow]}>
+              <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>
+                Total Payable:
+              </Text>
+              <Text style={[styles.summaryValue, styles.summaryTotalValue]}>
+                {formatCurrency(paymentBreakup.totalAmount)}
+              </Text>
+            </View>
+
+            <Text style={styles.summaryNote}>
+              PhonePe processing fee is applied at{" "}
+              {paymentBreakup.chargeRate.toFixed(2)}%. You will be charged the
+              total amount shown above.
+            </Text>
 
             {selectedAmount === "custom" && (
               <View style={styles.summaryRow}>
@@ -487,7 +585,7 @@ const TenantPaymentScreen = ({ navigation, route }) => {
                   style={styles.cancelButton}
                 />
                 <GradientButton
-                  title={`Pay ${formatCurrency(getPaymentAmount())}`}
+                  title={`Pay ${formatCurrency(paymentBreakup.totalAmount)}`}
                   onPress={processPayment}
                   style={styles.payButton}
                 />
@@ -953,6 +1051,27 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: spacing.sm,
+  },
+  summaryTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  summaryTotalLabel: {
+    ...typography.body1,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  summaryTotalValue: {
+    ...typography.h5,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  summaryNote: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   processingContainer: {
     alignItems: "center",

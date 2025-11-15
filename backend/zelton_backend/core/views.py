@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.contrib.auth.models import User
 from django.db.models import Q, Sum, Count, Avg
 from django.db import models
@@ -1341,28 +1341,33 @@ class PaymentViewSet(viewsets.ModelViewSet):
             amount = request.data.get('amount')
             payment_type = request.data.get('payment_type', 'rent')
             
-            if not amount:
+            if amount in (None, ''):
                 return Response({'error': 'Amount is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Convert amount to float for validation
+            # Convert amount to Decimal for validation
             try:
-                amount = float(amount)
+                base_amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             except (ValueError, TypeError):
                 return Response({'error': 'Invalid amount format'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Validate amount is positive
-            if amount <= 0:
+            if base_amount <= 0:
                 return Response({'error': 'Amount must be greater than 0'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Update and get remaining amount from unit
             remaining_amount = unit.update_remaining_amount(tenant)
             
             # Validate amount doesn't exceed remaining amount
-            if amount > remaining_amount:
+            if base_amount > remaining_amount:
                 return Response({
                     'error': f'Payment amount cannot exceed remaining amount of ₹{remaining_amount:.2f}',
                     'remaining_amount': float(remaining_amount)
                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calculate payment gateway charge
+            charge_rate_percent = Decimal('2.00') if base_amount <= Decimal('10000') else Decimal('2.50')
+            payment_charge = (base_amount * charge_rate_percent / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            total_amount = (base_amount + payment_charge).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             
             # Calculate due date (next month's rent due date)
             today = timezone.now().date()
@@ -1378,14 +1383,21 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment = Payment.objects.create(
                 tenant=tenant,
                 unit=unit,
-                amount=amount,
+                amount=base_amount,
+                payment_gateway_charge=payment_charge,
                 payment_type=payment_type,
                 status='pending',
                 due_date=next_month
             )
             
             # Initiate PhonePe payment
-            phonepe_response = PhonePeService.initiate_tenant_rent_payment(tenant, unit, amount)
+            phonepe_response = PhonePeService.initiate_tenant_rent_payment(
+                tenant,
+                unit,
+                base_amount,
+                payment_charge=payment_charge,
+                charge_rate_percent=charge_rate_percent
+            )
             
             if not phonepe_response['success']:
                 payment.status = 'failed'
@@ -1406,7 +1418,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 merchant_order_id=phonepe_response['merchant_order_id'],
                 phonepe_transaction_id=phonepe_response['merchant_order_id'],
                 phonepe_order_id=phonepe_response['order_id'],
-                amount=amount,
+                amount=total_amount,
                 user=request.user,
                 payment=payment,
                 status='initiated',
@@ -1421,7 +1433,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 'redirect_url': phonepe_response['redirect_url'],
                 'expire_at': phonepe_response['expire_at'],
                 'state': phonepe_response['state'],
-                'payment_id': payment.id
+                'payment_id': payment.id,
+                'payment_breakup': {
+                    'base_amount': float(base_amount),
+                    'payment_charge': float(payment_charge),
+                    'charge_rate_percent': float(charge_rate_percent),
+                    'total_payable': float(total_amount)
+                }
             }, status=status.HTTP_200_OK)
             
         except Exception as e:

@@ -30,20 +30,20 @@ class SubscriptionRenewalTestCase(TestCase):
         
         # Create pricing plans
         self.starter_plan = PricingPlan.objects.create(
-            name='1-20 Houses',
+            name='1-10 Houses',
             min_units=1,
-            max_units=20,
-            monthly_price=Decimal('2000.00'),
-            yearly_price=Decimal('22000.00'),
+            max_units=10,
+            monthly_price=Decimal('2500.00'),
+            yearly_price=Decimal('27500.00'),
             is_active=True
         )
         
         self.growth_plan = PricingPlan.objects.create(
-            name='21-40 Houses',
-            min_units=21,
-            max_units=40,
-            monthly_price=Decimal('4000.00'),
-            yearly_price=Decimal('44000.00'),
+            name='11-20 Houses',
+            min_units=11,
+            max_units=20,
+            monthly_price=Decimal('5000.00'),
+            yearly_price=Decimal('55000.00'),
             is_active=True
         )
         
@@ -132,7 +132,7 @@ class SubscriptionRenewalTestCase(TestCase):
         OwnerSubscriptionPayment.objects.create(
             owner=self.owner,
             pricing_plan=self.starter_plan,
-            amount=Decimal('2360.00'),  # 2000 + 18% GST
+            amount=Decimal('2950.00'),  # 2500 + 18% GST
             payment_type='renewal',
             status='pending',
             subscription_period='monthly'
@@ -168,7 +168,7 @@ class SubscriptionRenewalTestCase(TestCase):
         ).first()
         
         self.assertEqual(renewal_payment.subscription_period, 'yearly')
-        self.assertEqual(renewal_payment.amount, Decimal('51920.00'))  # 44000 + 18% GST
+        self.assertEqual(renewal_payment.amount, Decimal('32450.00'))  # 27500 + 18% GST
 
 
 class DowngradePreventionTestCase(TestCase):
@@ -193,20 +193,20 @@ class DowngradePreventionTestCase(TestCase):
         
         # Create pricing plans
         self.starter_plan = PricingPlan.objects.create(
-            name='1-20 Houses',
+            name='1-10 Houses',
             min_units=1,
-            max_units=20,
-            monthly_price=Decimal('2000.00'),
-            yearly_price=Decimal('22000.00'),
+            max_units=10,
+            monthly_price=Decimal('2500.00'),
+            yearly_price=Decimal('27500.00'),
             is_active=True
         )
         
         self.growth_plan = PricingPlan.objects.create(
-            name='21-40 Houses',
-            min_units=21,
-            max_units=40,
-            monthly_price=Decimal('4000.00'),
-            yearly_price=Decimal('44000.00'),
+            name='11-20 Houses',
+            min_units=11,
+            max_units=20,
+            monthly_price=Decimal('5000.00'),
+            yearly_price=Decimal('55000.00'),
             is_active=True
         )
         
