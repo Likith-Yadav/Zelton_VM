@@ -2,7 +2,7 @@
   "expo": {
     "name": "ZeltonLivings",
     "slug": "zeltonlivings_mobile",
-    "version": "1",
+    "version": "1.0.1",
     "description": "Property management app for owners and tenants",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zeltonlivings.mobile"
+      "bundleIdentifier": "com.zeltonliving.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,7 +36,7 @@
       }
     },
     "android": {
-      "package": "com.zeltonlivings.mobile",
+      "package": "com.zeltonliving.mobile",
       "compileSdkVersion": 35,
       "targetSdkVersion": 35,
       "versionCode": 2,

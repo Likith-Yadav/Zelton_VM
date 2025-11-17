@@ -44,7 +44,7 @@ def BUILD_FORMAT = "AAB"
 - **Location**: `android\app\zelton-release-key.keystore`
 
 ### App Details
-- **Package Name**: `com.zeltonlivings.mobile`
+- **Package Name**: `com.zeltonliving.mobile`
 - **Version**: 1.0.0
 - **Version Code**: 1
 - **Target SDK**: 34
