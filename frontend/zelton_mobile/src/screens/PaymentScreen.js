@@ -67,31 +67,55 @@ const PaymentScreen = ({ navigation, route }) => {
       setIsProcessing(true);
       console.log("Starting PhonePe payment processing...");
 
-      // Ensure token is ready before making payment request
+      // Ensure token is ready before making payment request (with retry for network errors)
       console.log("🔐 Validating token before subscription payment...");
-      const tokenCheck = await AuthService.ensureTokenReady();
+      const tokenCheck = await AuthService.ensureTokenReady(3); // 3 retries for network errors
       if (!tokenCheck.success) {
         console.error("❌ Token validation failed:", tokenCheck.error);
         setIsProcessing(false);
         setPaymentStatus("failed");
-        Alert.alert(
-          "Authentication Required",
-          tokenCheck.error || "Please login again to make a payment.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                setPaymentStatus("idle");
+        
+        // Check if it's a network error
+        if (tokenCheck.isNetworkError) {
+          Alert.alert(
+            "Connection Error",
+            "Unable to connect to the server. Please check your internet connection and try again.",
+            [
+              {
+                text: "Retry",
+                onPress: () => {
+                  setPaymentStatus("idle");
+                  setTimeout(() => processPayment(), 500); // Retry after 500ms
+                },
               },
-            },
-          ]
-        );
+              {
+                text: "Cancel",
+                onPress: () => {
+                  setPaymentStatus("idle");
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Authentication Required",
+            tokenCheck.error || "Please login again to make a payment.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  setPaymentStatus("idle");
+                },
+              },
+            ]
+          );
+        }
         return;
       }
 
       console.log("✅ Token validated successfully, proceeding with subscription payment");
 
-      // Initiate PhonePe subscription payment
+      // Initiate PhonePe subscription payment (with built-in retry logic)
       const isUpgrade = route.params?.isUpgrade || false;
       const response = await ownerSubscriptionAPI.initiateSubscriptionPayment(
         subscriptionData.plan.id,
@@ -133,11 +157,66 @@ const PaymentScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error("Payment processing error:", error);
+      console.error("Error message:", error.message);
+      console.error("Error response:", error.response);
+
+      // Handle network/connection errors - retry silently without alarming user
+      if (error.isNetworkError || error.isConnectionError || !error.response) {
+        const retryCount = error.retryCount || 0;
+        const maxRetries = 10;
+        
+        if (retryCount < maxRetries) {
+          console.log(`⚠️ Network error detected, retrying silently (${retryCount + 1}/${maxRetries})...`);
+          // Keep showing "processing" status and retry in background
+          const waitTime = Math.min(2000 * Math.pow(1.5, retryCount), 10000); // Exponential backoff, max 10s
+          setTimeout(() => {
+            error.retryCount = retryCount + 1;
+            processPayment();
+          }, waitTime);
+          return; // Don't set failed status, keep processing
+        } else {
+          // After max retries, show a friendly message
+          setPaymentStatus("failed");
+          Alert.alert(
+            "Connection Issue",
+            "We're having trouble connecting right now. Please check your internet connection and try again in a moment.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  setPaymentStatus("idle");
+                },
+              },
+            ]
+          );
+          setIsProcessing(false);
+          return;
+        }
+      }
+      
+      // Only set failed status for non-network errors
       setPaymentStatus("failed");
-      Alert.alert(
-        "Payment Failed",
-        error.message || "Failed to initiate payment"
-      );
+      
+      if (error.response && error.response.status === 401) {
+        // Handle 401 errors (but retry logic should have caught connection issues)
+        Alert.alert(
+          "Authentication Error",
+          "Your session has expired. Please login again to make a payment.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setPaymentStatus("idle");
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Payment Failed",
+          error.message || error.response?.data?.error || "Failed to initiate payment. Please try again."
+        );
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -199,13 +278,35 @@ const PaymentScreen = ({ navigation, route }) => {
           }
         } catch (error) {
           console.error("Error polling payment status:", error);
+          
+          // Handle network errors silently - don't alarm user
+          const isNetworkError = 
+            error.isNetworkError || 
+            error.isConnectionError || 
+            !error.response ||
+            error.code === "ECONNREFUSED" ||
+            error.code === "ETIMEDOUT";
+          
+          if (isNetworkError && attempts < maxAttempts) {
+            // Network error - continue polling, don't show error
+            console.log(`Network error while polling, continuing... (attempt ${attempts}/${maxAttempts})`);
+            return; // Continue polling
+          }
+          
+          // Only show error if it's not a network error or max attempts reached
           if (attempts >= maxAttempts) {
             clearInterval(pollInterval);
-            setPaymentStatus("failed");
-            Alert.alert(
-              "Payment Error",
-              "Unable to verify payment status. Please contact support."
-            );
+            if (!isNetworkError) {
+              // Only show error for non-network issues
+              setPaymentStatus("failed");
+              Alert.alert(
+                "Payment Status",
+                "Unable to verify payment status. Please check your payment history or contact support."
+              );
+            } else {
+              // For network errors, just keep showing processing
+              console.log("Max polling attempts reached due to network issues, but keeping status as processing");
+            }
           }
         }
       }, 10000); // Poll every 10 seconds
@@ -241,7 +342,7 @@ const PaymentScreen = ({ navigation, route }) => {
             </View>
             <Text style={styles.statusTitle}>Processing Payment</Text>
             <Text style={styles.statusDescription}>
-              Please wait while we process your payment...
+              Please wait while we connect and process your payment...
             </Text>
             <View style={styles.loadingDots}>
               <View style={[styles.dot, styles.dot1]} />

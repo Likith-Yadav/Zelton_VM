@@ -15,8 +15,8 @@ exec /ZeltonLivings/appsdata/backend/venv/bin/gunicorn \
     --bind 127.0.0.1:8000 \
     --workers 3 \
     --worker-class sync \
-    --timeout 30 \
-    --keep-alive 2 \
+    --timeout 60 \
+    --keep-alive 5 \
     --max-requests 1000 \
     --max-requests-jitter 50 \
     --access-logfile /ZeltonLivings/appsdata/backend/zelton_backend/logs/gunicorn_access.log \

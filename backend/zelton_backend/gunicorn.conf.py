@@ -11,8 +11,8 @@ backlog = 2048
 workers = multiprocessing.cpu_count() * 2 + 1
 worker_class = "sync"
 worker_connections = 1000
-timeout = 30
-keepalive = 2
+timeout = 60  # Increased timeout for payment requests (PhonePe API calls can take longer)
+keepalive = 5  # Increased keepalive for better connection handling
 
 # Restart workers after this many requests, to prevent memory leaks
 max_requests = 1000
@@ -52,7 +52,7 @@ limit_request_fields = 100
 limit_request_field_size = 8190
 
 # Graceful timeout for worker processes
-graceful_timeout = 30
+graceful_timeout = 60  # Increased for payment requests
 
 # Worker timeout
 worker_tmp_dir = "/dev/shm"

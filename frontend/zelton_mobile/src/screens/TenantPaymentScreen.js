@@ -187,30 +187,62 @@ const TenantPaymentScreen = ({ navigation, route }) => {
     setShowPaymentModal(true);
   };
 
-  const processPayment = async () => {
+  const processPayment = async (retryCount = 0, maxRetries = 10) => {
     try {
       setProcessingPayment(true);
       setPaymentStatus("processing");
 
-      // Ensure token is ready before making payment request
-      console.log("🔐 Validating token before payment...");
-      const tokenCheck = await AuthService.ensureTokenReady();
+      // Ensure token is ready before making payment request (with retry for network errors)
+      console.log(`🔐 Validating token before payment... (attempt ${retryCount + 1}/${maxRetries})`);
+      const tokenCheck = await AuthService.ensureTokenReady(5); // 5 retries for network errors
       if (!tokenCheck.success) {
         console.error("❌ Token validation failed:", tokenCheck.error);
-        setProcessingPayment(false);
-        setPaymentStatus("failed");
-        Alert.alert(
-          "Authentication Required",
-          tokenCheck.error || "Please login again to make a payment.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                setPaymentStatus("idle");
-              },
-            },
-          ]
-        );
+        
+        // Check if it's a network error - retry silently without alarming user
+        if (tokenCheck.isNetworkError && retryCount < maxRetries) {
+          console.log(`⚠️ Network error detected, retrying silently (${retryCount + 1}/${maxRetries})...`);
+          // Keep showing "processing" status and retry in background
+          const waitTime = Math.min(2000 * Math.pow(1.5, retryCount), 10000); // Exponential backoff, max 10s
+          setTimeout(() => {
+            processPayment(retryCount + 1, maxRetries);
+          }, waitTime);
+          return; // Don't set failed status, keep processing
+        }
+        
+        // Only show error if it's a real auth issue (not network) or max retries reached
+        if (!tokenCheck.isNetworkError || retryCount >= maxRetries) {
+          setProcessingPayment(false);
+          setPaymentStatus("failed");
+          
+          if (tokenCheck.isNetworkError) {
+            // After max retries, show a friendly message
+            Alert.alert(
+              "Connection Issue",
+              "We're having trouble connecting. Please check your internet connection and try again in a moment.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    setPaymentStatus("idle");
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert(
+              "Authentication Required",
+              tokenCheck.error || "Please login again to make a payment.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    setPaymentStatus("idle");
+                  },
+                },
+              ]
+            );
+          }
+        }
         return;
       }
 
@@ -219,7 +251,7 @@ const TenantPaymentScreen = ({ navigation, route }) => {
       const localBreakup = normalizeBreakup(paymentBreakup);
       const amount = localBreakup.baseAmount;
 
-      // Initiate PhonePe payment
+      // Initiate PhonePe payment (with built-in retry logic)
       console.log(`=== FRONTEND PAYMENT DEBUG ===`);
       console.log(`Payment amount: ${amount}`);
       console.log(`Payment type: rent`);
@@ -272,6 +304,42 @@ const TenantPaymentScreen = ({ navigation, route }) => {
       console.error("Payment error:", error);
       console.error("Error message:", error.message);
       console.error("Error response:", error.response);
+
+      // Handle network/connection errors - retry silently without alarming user
+      if (error.isNetworkError || error.isConnectionError || !error.response) {
+        const retryCount = error.retryCount || 0;
+        const maxRetries = 10;
+        
+        if (retryCount < maxRetries) {
+          console.log(`⚠️ Network error detected, retrying silently (${retryCount + 1}/${maxRetries})...`);
+          // Keep showing "processing" status and retry in background
+          const waitTime = Math.min(2000 * Math.pow(1.5, retryCount), 10000); // Exponential backoff, max 10s
+          setTimeout(() => {
+            error.retryCount = retryCount + 1;
+            processPayment(retryCount + 1, maxRetries);
+          }, waitTime);
+          return; // Don't set failed status, keep processing
+        } else {
+          // After max retries, show a friendly message
+          setPaymentStatus("failed");
+          Alert.alert(
+            "Connection Issue",
+            "We're having trouble connecting right now. Please check your internet connection and try again in a moment.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  setPaymentStatus("idle");
+                },
+              },
+            ]
+          );
+          setProcessingPayment(false);
+          return;
+        }
+      }
+      
+      // Only set failed status for non-network errors
       setPaymentStatus("failed");
 
       // Handle duplicate payment error specifically
@@ -297,10 +365,24 @@ const TenantPaymentScreen = ({ navigation, route }) => {
             },
           },
         ]);
+      } else if (error.response && error.response.status === 401) {
+        // Handle 401 errors (but retry logic should have caught connection issues)
+        Alert.alert(
+          "Authentication Error",
+          "Your session has expired. Please login again to make a payment.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setPaymentStatus("idle");
+              },
+            },
+          ]
+        );
       } else {
         Alert.alert(
           "Payment Failed",
-          error.message || "Failed to initiate payment"
+          error.message || error.response?.data?.error || "Failed to initiate payment. Please try again."
         );
       }
     } finally {
@@ -378,20 +460,57 @@ const TenantPaymentScreen = ({ navigation, route }) => {
           }
         } catch (error) {
           console.error("Error polling payment status:", error);
+          
+          // Handle network errors silently - don't alarm user
+          const isNetworkError = 
+            error.isNetworkError || 
+            error.isConnectionError || 
+            !error.response ||
+            error.code === "ECONNREFUSED" ||
+            error.code === "ETIMEDOUT";
+          
+          if (isNetworkError && attempts < maxAttempts) {
+            // Network error - continue polling, don't show error
+            console.log(`Network error while polling, continuing... (attempt ${attempts}/${maxAttempts})`);
+            return; // Continue polling
+          }
+          
+          // Only show error if it's not a network error or max attempts reached
           if (attempts >= maxAttempts) {
             clearInterval(pollInterval);
-            setPaymentStatus("failed");
-            Alert.alert(
-              "Payment Error",
-              "Unable to verify payment status. Please contact support."
-            );
+            if (!isNetworkError) {
+              // Only show error for non-network issues
+              setPaymentStatus("failed");
+              Alert.alert(
+                "Payment Status",
+                "Unable to verify payment status. Please check your payment history or contact support."
+              );
+            } else {
+              // For network errors, just keep showing processing
+              console.log("Max polling attempts reached due to network issues, but keeping status as processing");
+            }
           }
         }
       }, 30000); // Poll every 30 seconds instead of 10 seconds
     } catch (error) {
       console.error("Error setting up payment polling:", error);
-      setPaymentStatus("failed");
-      Alert.alert("Payment Error", "Failed to monitor payment status");
+      
+      // Handle network errors silently - don't alarm user
+      const isNetworkError = 
+        error.isNetworkError || 
+        error.isConnectionError || 
+        !error.response ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT";
+      
+      if (!isNetworkError) {
+        // Only show error for non-network issues
+        setPaymentStatus("failed");
+        Alert.alert("Payment Error", "Failed to monitor payment status. Please check your payment history.");
+      } else {
+        // For network errors, keep showing processing
+        console.log("Network error setting up polling, but keeping status as processing");
+      }
     }
   };
 
@@ -545,6 +664,9 @@ const TenantPaymentScreen = ({ navigation, route }) => {
             <View style={styles.processingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.processingText}>Processing Payment...</Text>
+              <Text style={styles.processingSubtext}>
+                Please wait while we connect to the payment gateway
+              </Text>
               <Text style={styles.processingSubtext}>
                 Please wait while we process your payment
               </Text>

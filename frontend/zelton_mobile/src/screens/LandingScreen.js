@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,37 +7,150 @@ import {
   Image,
   StatusBar,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import GradientButton from '../components/GradientButton';
 import { colors, typography, spacing, gradients } from '../theme/theme';
+import AuthService from '../services/authService';
+import DataService from '../services/dataService';
 
 const { width, height } = Dimensions.get('window');
 
 const LandingScreen = ({ navigation }) => {
   const fadeAnim = new Animated.Value(0);
   const slideAnim = new Animated.Value(50);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Animate on mount
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Check if user is already logged in
+    checkAuthAndRedirect();
+    
+    // Animate on mount (only if not redirecting)
+    if (!isCheckingAuth) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }, []);
+
+  const checkAuthAndRedirect = async () => {
+    try {
+      console.log("🔐 LandingScreen: Checking authentication status...");
+      
+      // Check if user has stored credentials
+      const isLoggedIn = await AuthService.isLoggedIn();
+      
+      if (isLoggedIn) {
+        console.log("✅ User is logged in, verifying token...");
+        
+        // Verify token is valid with backend
+        const tokenResult = await AuthService.verifyToken();
+        
+        if (tokenResult.success) {
+          console.log("✅ Token verified, redirecting to dashboard...");
+          
+          // Get user data to determine role
+          const userData = await AuthService.getStoredUserData();
+          
+          if (userData.success) {
+            const role = userData.role || userData.data?.role;
+            
+            // Check if owner has active subscription
+            if (role === "owner" && userData.data.profile) {
+              if (userData.data.profile.subscription_status !== "active") {
+                navigation.replace("Pricing");
+                return;
+              }
+              navigation.replace("OwnerDashboard");
+              return;
+            }
+            
+            // For tenants, check if property is assigned
+            if (role === "tenant") {
+              try {
+                const dashboardResult = await DataService.getTenantDashboard();
+                if (!dashboardResult.success && dashboardResult.error === "No property assigned") {
+                  navigation.replace("TenantKeyJoin");
+                  return;
+                }
+                navigation.replace("TenantDashboard");
+                return;
+              } catch (error) {
+                console.error("Error checking tenant dashboard:", error);
+                // If there's an error, still try to navigate to dashboard
+                navigation.replace("TenantDashboard");
+                return;
+              }
+            }
+            
+            // Default navigation based on role
+            if (role === "owner") {
+              navigation.replace("OwnerDashboard");
+            } else if (role === "tenant") {
+              navigation.replace("TenantDashboard");
+            }
+          }
+        } else {
+          console.log("⚠️ Token invalid, clearing and showing landing screen");
+          await AuthService.clearUserData();
+        }
+      } else {
+        console.log("ℹ️ No existing session found");
+      }
+    } catch (error) {
+      console.error("Error checking authentication:", error);
+    } finally {
+      setIsCheckingAuth(false);
+      // Start animation after auth check
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  };
 
   const handleGetStarted = () => {
     navigation.navigate('Auth');
   };
+
+  // Show loading indicator while checking auth
+  if (isCheckingAuth) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <LinearGradient
+          colors={gradients.primary}
+          style={styles.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.white} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </LinearGradient>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -212,6 +325,17 @@ const styles = StyleSheet.create({
   linkText: {
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.body1,
+    color: colors.white,
+    marginTop: spacing.md,
+    opacity: 0.9,
   },
 });
 

@@ -270,7 +270,7 @@ class AuthService {
   }
 
   // Ensure token is ready and valid before making payment requests
-  async ensureTokenReady() {
+  async ensureTokenReady(maxRetries = 3) {
     try {
       console.log("Ensuring token is ready...");
       
@@ -281,8 +281,38 @@ class AuthService {
         return { success: false, error: "No authentication token found. Please login again." };
       }
 
-      // Verify token is still valid
-      const tokenResult = await this.verifyToken();
+      // Verify token is still valid with retry logic for network errors
+      let tokenResult;
+      let lastError;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          tokenResult = await this.verifyToken();
+          break; // Success, exit retry loop
+        } catch (error) {
+          lastError = error;
+          
+          // Check if it's a network error (retryable)
+          const isNetworkError = 
+            !error.response ||
+            error.isNetworkError ||
+            error.code === "ECONNREFUSED" ||
+            error.code === "ETIMEDOUT" ||
+            error.code === "ENOTFOUND";
+          
+          if (!isNetworkError || attempt === maxRetries - 1) {
+            // Not a network error or last attempt - treat as auth failure
+            tokenResult = { success: false, error: error.message || "Token verification failed" };
+            break;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const waitTime = 1000 * Math.pow(2, attempt);
+          console.log(`Token verification failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+      
       if (tokenResult.success) {
         console.log("✅ Token is valid and ready");
         return { success: true };
@@ -298,6 +328,22 @@ class AuthService {
       }
     } catch (error) {
       console.error("Error ensuring token ready:", error);
+      
+      // Check if it's a network error
+      const isNetworkError = 
+        !error.response ||
+        error.isNetworkError ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT";
+      
+      if (isNetworkError) {
+        return { 
+          success: false, 
+          error: "Network error. Please check your connection and try again.",
+          isNetworkError: true
+        };
+      }
+      
       return { 
         success: false, 
         error: "Authentication error. Please try again.",

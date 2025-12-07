@@ -82,19 +82,23 @@ export default function App() {
       const isLoggedIn = await AuthService.isLoggedIn();
       
       if (isLoggedIn) {
-        // Verify token is valid with backend
-        const tokenResult = await AuthService.verifyToken();
+        // Verify token is valid with backend (with retry logic for network errors)
+        const tokenResult = await AuthService.ensureTokenReady(3);
         if (tokenResult.success) {
           console.log("✅ Token verified successfully on app startup");
         } else {
           console.log("⚠️ Token invalid or expired, clearing storage");
-          await AuthService.clearUserData();
+          // Only clear if it's not a network error
+          if (!tokenResult.isNetworkError) {
+            await AuthService.clearUserData();
+          }
         }
       } else {
         console.log("ℹ️ No existing session found");
       }
     } catch (error) {
       console.error("Error initializing app:", error);
+      // Don't clear user data on initialization error - might be network issue
     } finally {
       setIsTokenReady(true);
     }

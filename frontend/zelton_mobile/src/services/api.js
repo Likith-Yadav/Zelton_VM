@@ -5,7 +5,7 @@ import { API_BASE_URL, STORAGE_KEYS } from "../constants/constants";
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // Increased timeout for file uploads
+  timeout: 45000, // Increased timeout for payment requests and network issues (45 seconds)
   headers: {
     "X-Requested-With": "XMLHttpRequest",
     "Accept": "application/json",
@@ -16,6 +16,8 @@ const api = axios.create({
   },
   // Disable credentials for better compatibility
   withCredentials: false,
+  // Add retry configuration for connection issues
+  retry: 0, // We handle retries manually for better control
 });
 
 // Request interceptor to add auth token
@@ -110,15 +112,80 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // Handle 401 errors by clearing stored token
+    // Handle network errors (connection issues, port 443 errors, etc.)
+    if (!error.response) {
+      // Network error - could be connection timeout, port 443 issue, etc.
+      console.error("Network error detected:", error.message);
+      // Don't clear token for network errors - might be temporary connection issue
+      return Promise.reject({
+        ...error,
+        isNetworkError: true,
+        message: error.message || "Network error. Please check your connection and try again.",
+      });
+    }
+
+    // Handle 401 errors - but check if it's a real auth issue or network issue
     if (error.response && error.response.status === 401) {
-      try {
-        await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
-        await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
-        await AsyncStorage.removeItem(STORAGE_KEYS.USER_ROLE);
-        console.log("Cleared stored authentication data due to 401 error");
-      } catch (clearError) {
-        console.error("Error clearing stored data:", clearError);
+      const originalRequest = error.config;
+      
+      // Check if it's a connection error masquerading as 401
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.response?.data?.detail || "";
+      const errorData = error.response?.data || {};
+      
+      // Check for network-related error codes or messages
+      const isConnectionError = 
+        errorMessage.toLowerCase().includes("connection") ||
+        errorMessage.toLowerCase().includes("timeout") ||
+        errorMessage.toLowerCase().includes("443") ||
+        errorMessage.toLowerCase().includes("network") ||
+        errorMessage.toLowerCase().includes("failed to fetch") ||
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT" ||
+        error.code === "ENOTFOUND" ||
+        error.code === "ERR_NETWORK" ||
+        error.message?.includes("Network Error");
+      
+      // Check if error message suggests authorization token issue
+      const isAuthError = 
+        errorMessage.toLowerCase().includes("authorization") ||
+        errorMessage.toLowerCase().includes("token") ||
+        errorMessage.toLowerCase().includes("authentication") ||
+        errorMessage.toLowerCase().includes("unauthorized") ||
+        errorData.code === "AUTHORIZATION_FAILED";
+      
+      // Don't clear token if it's clearly a network error
+      if (isConnectionError && !isAuthError) {
+        console.warn("401 error appears to be connection issue, not auth issue");
+        return Promise.reject({
+          ...error,
+          isNetworkError: true,
+          isConnectionError: true,
+          message: "Connection error. Please check your internet connection and try again.",
+        });
+      }
+      
+      // Only clear token for actual auth errors, and only if not already cleared
+      if (isAuthError || (!isConnectionError && !originalRequest._retry)) {
+        // Mark request as retried to prevent infinite loops
+        originalRequest._retry = true;
+        
+        // Check if we already have a token before clearing
+        const existingToken = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);
+        if (existingToken && existingToken !== "undefined" && existingToken !== "null") {
+          console.warn("401 authorization error detected - token may be invalid");
+          // Only clear token if this is not an auth endpoint (to avoid clearing during login attempts)
+          if (!originalRequest.url?.includes("/api/auth/login") && 
+              !originalRequest.url?.includes("/api/auth/register")) {
+            try {
+              await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
+              await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+              await AsyncStorage.removeItem(STORAGE_KEYS.USER_ROLE);
+              console.log("Cleared stored authentication data due to 401 authorization error");
+            } catch (clearError) {
+              console.error("Error clearing stored data:", clearError);
+            }
+          }
+        }
       }
     }
     return Promise.reject(error);
@@ -148,14 +215,18 @@ export const ownerAPI = {
 
 // Owner Subscription API
 export const ownerSubscriptionAPI = {
-  initiateSubscriptionPayment: (pricingPlanId, period = "monthly", isUpgrade = false) => {
+  initiateSubscriptionPayment: async (pricingPlanId, period = "monthly", isUpgrade = false) => {
     const endpoint = isUpgrade 
       ? "/api/owner-subscriptions/initiate_upgrade/"
       : "/api/owner-subscriptions/initiate_payment/";
-    return api.post(endpoint, {
-      pricing_plan_id: pricingPlanId,
-      period: period,
-    });
+    return retryRequest(
+      () => api.post(endpoint, {
+        pricing_plan_id: pricingPlanId,
+        period: period,
+      }),
+      5, // max retries (increased for better reliability)
+      1000
+    );
   },
 
   verifySubscriptionPayment: (merchantOrderId) =>
@@ -204,20 +275,68 @@ export const tenantAPI = {
   joinProperty: (key) => api.post("/api/tenants/join-property/", { key }),
 };
 
+// Retry utility for network errors - more aggressive retries for payment requests
+const retryRequest = async (requestFn, maxRetries = 5, delay = 1000) => {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      lastError = error;
+      
+      // Check if it's a retryable error (network error or connection issue)
+      const isRetryable = 
+        error.isNetworkError ||
+        error.isConnectionError ||
+        !error.response || // Network error (no response)
+        error.code === "ECONNREFUSED" ||
+        error.code === "ETIMEDOUT" ||
+        error.code === "ENOTFOUND" ||
+        (error.response && error.response.status === 401 && error.isConnectionError) ||
+        (error.response && error.response.status >= 500); // Server errors
+      
+      if (!isRetryable || attempt === maxRetries - 1) {
+        // Not retryable or last attempt
+        throw error;
+      }
+      
+      // Calculate exponential backoff delay (capped at 10 seconds)
+      const waitTime = Math.min(delay * Math.pow(1.5, attempt), 10000);
+      console.log(`Request failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${waitTime}ms...`, error.message);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+  
+  throw lastError;
+};
+
 // Payment API
 export const paymentAPI = {
   getPayments: () => api.get("/api/payments/"),
   getPayment: (id) => api.get(`/api/payments/${id}/`),
 
-  // PhonePe Integration Methods
-  initiateTenantRentPayment: (amount, paymentType = "rent") =>
-    api.post("/api/payments/initiate_rent_payment/", {
-      amount,
-      payment_type: paymentType,
-    }),
+  // PhonePe Integration Methods with retry logic
+  initiateTenantRentPayment: async (amount, paymentType = "rent") => {
+    return retryRequest(
+      () => api.post("/api/payments/initiate_rent_payment/", {
+        amount,
+        payment_type: paymentType,
+      }),
+      5, // max retries (increased for better reliability)
+      1000 // initial delay in ms
+    );
+  },
 
-  verifyPaymentStatus: (merchantOrderId) =>
-    api.get(`/api/payments/verify-payment/${merchantOrderId}/`),
+  verifyPaymentStatus: async (merchantOrderId) => {
+    return retryRequest(
+      () => api.get(`/api/payments/verify-payment/${merchantOrderId}/`),
+      5, // max retries (increased for better reliability)
+      1000
+    );
+  },
 
   handlePaymentCallback: (orderId, status) =>
     api.post("/api/payments/handle-payment-callback/", {
