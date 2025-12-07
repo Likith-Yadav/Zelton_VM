@@ -406,6 +406,33 @@ class AuthService {
       return { success: false, error: "Error retrieving stored data" };
     }
   }
+
+  // Change password for authenticated user
+  async changePassword(currentPassword, newPassword) {
+    try {
+      console.log("Attempting to change password...");
+
+      const response = await api.post("/api/auth/change_password/", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+
+      if (response.data.success) {
+        console.log("Password changed successfully");
+        return { success: true, message: response.data.message || "Password changed successfully" };
+      } else {
+        return {
+          success: false,
+          error: response.data.error || "Failed to change password",
+        };
+      }
+    } catch (error) {
+      console.error("Change password error:", error);
+      const errorMessage =
+        error.response?.data?.error || "Failed to change password. Please try again.";
+      return { success: false, error: errorMessage };
+    }
+  }
 }
 
 export default new AuthService();

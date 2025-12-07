@@ -176,13 +176,13 @@ api.interceptors.response.use(
           // Only clear token if this is not an auth endpoint (to avoid clearing during login attempts)
           if (!originalRequest.url?.includes("/api/auth/login") && 
               !originalRequest.url?.includes("/api/auth/register")) {
-            try {
-              await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
-              await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
-              await AsyncStorage.removeItem(STORAGE_KEYS.USER_ROLE);
+      try {
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+        await AsyncStorage.removeItem(STORAGE_KEYS.USER_ROLE);
               console.log("Cleared stored authentication data due to 401 authorization error");
-            } catch (clearError) {
-              console.error("Error clearing stored data:", clearError);
+      } catch (clearError) {
+        console.error("Error clearing stored data:", clearError);
             }
           }
         }

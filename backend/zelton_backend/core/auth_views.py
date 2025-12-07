@@ -502,6 +502,104 @@ The ZeltonLivings Team'''
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        """Change password for authenticated user"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        
+        if not current_password or not new_password:
+            return Response(
+                {'error': 'Current password and new password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify current password
+        user = request.user
+        if not user.check_password(current_password):
+            return Response(
+                {'error': 'Current password is incorrect'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate new password strength
+        if len(new_password) < 8:
+            return Response(
+                {'error': 'New password must be at least 8 characters long'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if new password is different from current password
+        if user.check_password(new_password):
+            return Response(
+                {'error': 'New password must be different from current password'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update password
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Password changed successfully'
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        """Change password for authenticated user"""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+        
+        if not current_password or not new_password:
+            return Response(
+                {'error': 'Current password and new password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify current password
+        user = request.user
+        if not user.check_password(current_password):
+            return Response(
+                {'error': 'Current password is incorrect'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate new password strength
+        if len(new_password) < 8:
+            return Response(
+                {'error': 'New password must be at least 8 characters long'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if new password is different from current password
+        if user.check_password(new_password):
+            return Response(
+                {'error': 'New password must be different from current password'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update password
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Password changed successfully'
+        }, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'])
     def send_otp(self, request):
         """Send OTP for email verification"""

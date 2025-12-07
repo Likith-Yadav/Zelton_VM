@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import GradientCard from "../components/GradientCard";
 import GradientButton from "../components/GradientButton";
 import PhoneInputField from "../components/PhoneInputField";
+import InputField from "../components/InputField";
+import InputField from "../components/InputField";
 import {
   colors,
   typography,
@@ -38,6 +40,14 @@ const ProfileScreen = ({ navigation }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     // Add a small delay to ensure AsyncStorage is available
@@ -396,16 +406,91 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleChangePassword = () => {
-    Alert.alert(
-      'Change Password',
-      'Password change functionality will be implemented soon. For now, please contact support if you need to change your password.',
-      [
-        {
-          text: 'OK',
-          style: 'default'
-        }
-      ]
-    );
+    setShowChangePasswordModal(true);
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setPasswordErrors({});
+  };
+
+  const validatePasswordForm = () => {
+    const errors = {};
+
+    if (!passwordData.currentPassword.trim()) {
+      errors.currentPassword = 'Current password is required';
+    }
+
+    if (!passwordData.newPassword.trim()) {
+      errors.newPassword = 'New password is required';
+    } else if (passwordData.newPassword.length < 8) {
+      errors.newPassword = 'Password must be at least 8 characters long';
+    }
+
+    if (!passwordData.confirmPassword.trim()) {
+      errors.confirmPassword = 'Please confirm your new password';
+    } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword && passwordData.newPassword) {
+      errors.newPassword = 'New password must be different from current password';
+    }
+
+    setPasswordErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmitChangePassword = async () => {
+    if (!validatePasswordForm()) {
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      const result = await AuthService.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+
+      if (result.success) {
+        Alert.alert(
+          'Success',
+          result.message || 'Password changed successfully. Please login again with your new password.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                setShowChangePasswordModal(false);
+                // Optionally logout user after password change for security
+                // Or just clear the form
+                setPasswordData({
+                  currentPassword: '',
+                  newPassword: '',
+                  confirmPassword: '',
+                });
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to change password. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error changing password:', error);
+      Alert.alert('Error', 'Failed to change password. Please try again.');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handlePasswordInputChange = (field, value) => {
+    setPasswordData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (passwordErrors[field]) {
+      setPasswordErrors((prev) => ({ ...prev, [field]: '' }));
+    }
   };
 
   const handleEdit = () => {
@@ -745,6 +830,83 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Content */}
       {renderProfile()}
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowChangePasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Change Password</Text>
+              <TouchableOpacity
+                onPress={() => setShowChangePasswordModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <InputField
+                label="Current Password"
+                placeholder="Enter your current password"
+                value={passwordData.currentPassword}
+                onChangeText={(text) => handlePasswordInputChange('currentPassword', text)}
+                secureTextEntry={true}
+                error={passwordErrors.currentPassword}
+                required
+              />
+
+              <InputField
+                label="New Password"
+                placeholder="Enter your new password"
+                value={passwordData.newPassword}
+                onChangeText={(text) => handlePasswordInputChange('newPassword', text)}
+                secureTextEntry={true}
+                error={passwordErrors.newPassword}
+                required
+              />
+
+              <InputField
+                label="Confirm New Password"
+                placeholder="Confirm your new password"
+                value={passwordData.confirmPassword}
+                onChangeText={(text) => handlePasswordInputChange('confirmPassword', text)}
+                secureTextEntry={true}
+                error={passwordErrors.confirmPassword}
+                required
+              />
+
+              <View style={styles.modalActions}>
+                <GradientButton
+                  title={changingPassword ? "Changing..." : "Change Password"}
+                  onPress={handleSubmitChangePassword}
+                  style={styles.changePasswordButton}
+                  loading={changingPassword}
+                />
+                <GradientButton
+                  title="Cancel"
+                  onPress={() => {
+                    setShowChangePasswordModal(false);
+                    setPasswordData({
+                      currentPassword: '',
+                      newPassword: '',
+                      confirmPassword: '',
+                    });
+                    setPasswordErrors({});
+                  }}
+                  variant="secondary"
+                  style={styles.cancelPasswordButton}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 };
@@ -978,6 +1140,48 @@ const styles = StyleSheet.create({
     ...typography.body1,
     color: colors.textSecondary,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '80%',
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: spacing.xs,
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalActions: {
+    marginTop: spacing.lg,
+    gap: spacing.md,
+  },
+  changePasswordButton: {
+    marginTop: spacing.md,
+  },
+  cancelPasswordButton: {
+    marginTop: spacing.xs,
   },
 });
 

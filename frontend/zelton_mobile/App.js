@@ -90,7 +90,7 @@ export default function App() {
           console.log("⚠️ Token invalid or expired, clearing storage");
           // Only clear if it's not a network error
           if (!tokenResult.isNetworkError) {
-            await AuthService.clearUserData();
+          await AuthService.clearUserData();
           }
         }
       } else {
