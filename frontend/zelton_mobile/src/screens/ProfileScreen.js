@@ -18,7 +18,6 @@ import GradientCard from "../components/GradientCard";
 import GradientButton from "../components/GradientButton";
 import PhoneInputField from "../components/PhoneInputField";
 import InputField from "../components/InputField";
-import InputField from "../components/InputField";
 import {
   colors,
   typography,
@@ -455,12 +454,12 @@ const ProfileScreen = ({ navigation }) => {
       );
 
       if (result.success) {
-        Alert.alert(
+    Alert.alert(
           'Success',
           result.message || 'Password changed successfully. Please login again with your new password.',
-          [
-            {
-              text: 'OK',
+      [
+        {
+          text: 'OK',
               onPress: async () => {
                 setShowChangePasswordModal(false);
                 // Optionally logout user after password change for security
