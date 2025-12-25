@@ -67,9 +67,9 @@ const PaymentScreen = ({ navigation, route }) => {
       setIsProcessing(true);
       console.log("Starting PhonePe payment processing...");
 
-      // Ensure token is ready before making payment request (with retry for network errors)
+      // Ensure token is ready before making payment request (single attempt)
       console.log("🔐 Validating token before subscription payment...");
-      const tokenCheck = await AuthService.ensureTokenReady(3); // 3 retries for network errors
+      const tokenCheck = await AuthService.ensureTokenReady(1);
       if (!tokenCheck.success) {
         console.error("❌ Token validation failed:", tokenCheck.error);
         setIsProcessing(false);
@@ -81,13 +81,6 @@ const PaymentScreen = ({ navigation, route }) => {
             "Connection Error",
             "Unable to connect to the server. Please check your internet connection and try again.",
             [
-              {
-                text: "Retry",
-                onPress: () => {
-                  setPaymentStatus("idle");
-                  setTimeout(() => processPayment(), 500); // Retry after 500ms
-                },
-              },
               {
                 text: "Cancel",
                 onPress: () => {
@@ -160,38 +153,23 @@ const PaymentScreen = ({ navigation, route }) => {
       console.error("Error message:", error.message);
       console.error("Error response:", error.response);
 
-      // Handle network/connection errors - retry silently without alarming user
+      // Handle network/connection errors - single attempt only
       if (error.isNetworkError || error.isConnectionError || !error.response) {
-        const retryCount = error.retryCount || 0;
-        const maxRetries = 10;
-        
-        if (retryCount < maxRetries) {
-          console.log(`⚠️ Network error detected, retrying silently (${retryCount + 1}/${maxRetries})...`);
-          // Keep showing "processing" status and retry in background
-          const waitTime = Math.min(2000 * Math.pow(1.5, retryCount), 10000); // Exponential backoff, max 10s
-          setTimeout(() => {
-            error.retryCount = retryCount + 1;
-            processPayment();
-          }, waitTime);
-          return; // Don't set failed status, keep processing
-        } else {
-          // After max retries, show a friendly message
-          setPaymentStatus("failed");
-          Alert.alert(
-            "Connection Issue",
-            "We're having trouble connecting right now. Please check your internet connection and try again in a moment.",
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  setPaymentStatus("idle");
-                },
+        setPaymentStatus("failed");
+        Alert.alert(
+          "Connection Issue",
+          "We're having trouble connecting right now. Please check your internet connection and try again.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setPaymentStatus("idle");
               },
-            ]
-          );
-          setIsProcessing(false);
-          return;
-        }
+            },
+          ]
+        );
+        setIsProcessing(false);
+        return;
       }
       
       // Only set failed status for non-network errors

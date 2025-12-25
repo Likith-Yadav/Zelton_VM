@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,8 @@ import DataService from '../services/dataService';
 const { width, height } = Dimensions.get('window');
 
 const LandingScreen = ({ navigation }) => {
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(50);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
@@ -47,25 +47,25 @@ const LandingScreen = ({ navigation }) => {
   const checkAuthAndRedirect = async () => {
     try {
       console.log("🔐 LandingScreen: Checking authentication status...");
-      
+
       // Check if user has stored credentials
       const isLoggedIn = await AuthService.isLoggedIn();
-      
+
       if (isLoggedIn) {
         console.log("✅ User is logged in, verifying token...");
-        
+
         // Verify token is valid with backend
         const tokenResult = await AuthService.verifyToken();
-        
+
         if (tokenResult.success) {
           console.log("✅ Token verified, redirecting to dashboard...");
-          
+
           // Get user data to determine role
           const userData = await AuthService.getStoredUserData();
-          
+
           if (userData.success) {
             const role = userData.role || userData.data?.role;
-            
+
             // Check if owner has active subscription
             if (role === "owner" && userData.data.profile) {
               if (userData.data.profile.subscription_status !== "active") {
@@ -75,7 +75,7 @@ const LandingScreen = ({ navigation }) => {
               navigation.replace("OwnerDashboard");
               return;
             }
-            
+
             // For tenants, check if property is assigned
             if (role === "tenant") {
               try {
@@ -93,12 +93,15 @@ const LandingScreen = ({ navigation }) => {
                 return;
               }
             }
-            
+
             // Default navigation based on role
             if (role === "owner") {
               navigation.replace("OwnerDashboard");
-            } else if (role === "tenant") {
+              return;
+            }
+            if (role === "tenant") {
               navigation.replace("TenantDashboard");
+              return;
             }
           }
         } else {

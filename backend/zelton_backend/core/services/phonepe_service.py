@@ -20,6 +20,43 @@ class PhonePeService:
     """PhonePe Payment Gateway Service"""
     
     _client = None
+    _timeout_patched = False
+
+    @classmethod
+    def _apply_request_timeout(cls):
+        """Best-effort: configure SDK HTTP timeout if supported."""
+        timeout = getattr(settings, "PHONEPE_REQUEST_TIMEOUT", None)
+        if not timeout:
+            return
+        try:
+            from phonepe.sdk.pg.common import http_client  # type: ignore
+            for attr in ("DEFAULT_TIMEOUT", "REQUEST_TIMEOUT", "TIMEOUT"):
+                if hasattr(http_client, attr):
+                    setattr(http_client, attr, timeout)
+        except Exception:
+            # SDK does not expose timeout customization in this environment.
+            pass
+        if cls._timeout_patched:
+            return
+        try:
+            import requests
+        except Exception:
+            return
+        original_request = requests.sessions.Session.request
+
+        def _request_with_timeout(self, method, url, **kwargs):
+            current_timeout = kwargs.get("timeout")
+            if isinstance(current_timeout, (tuple, list)) and len(current_timeout) == 2:
+                if current_timeout[0] is None or current_timeout[1] is None:
+                    kwargs["timeout"] = (timeout, timeout)
+                elif current_timeout[0] < timeout or current_timeout[1] < timeout:
+                    kwargs["timeout"] = (timeout, timeout)
+            elif current_timeout is None or current_timeout < timeout:
+                kwargs["timeout"] = timeout
+            return original_request(self, method, url, **kwargs)
+
+        requests.sessions.Session.request = _request_with_timeout
+        cls._timeout_patched = True
     
     @classmethod
     def reset_client(cls):
@@ -30,17 +67,30 @@ class PhonePeService:
     @classmethod
     def get_client(cls):
         """Get PhonePe client instance (singleton)"""
+        # Always ensure timeout patch is applied, even if client is cached.
+        cls._apply_request_timeout()
         if cls._client is None:
             try:
                 env = Env.SANDBOX if settings.PHONEPE_ENVIRONMENT == 'SANDBOX' else Env.PRODUCTION
                 logger.info(f"Initializing PhonePe client with ID: {settings.PHONEPE_CLIENT_ID}, Environment: {settings.PHONEPE_ENVIRONMENT}")
-                cls._client = StandardCheckoutClient.get_instance(
-                    client_id=settings.PHONEPE_CLIENT_ID,
-                    client_secret=settings.PHONEPE_CLIENT_SECRET,
-                    client_version=settings.PHONEPE_CLIENT_VERSION,
-                    env=env,
-                    should_publish_events=False
-                )
+                client_kwargs = {
+                    "client_id": settings.PHONEPE_CLIENT_ID,
+                    "client_secret": settings.PHONEPE_CLIENT_SECRET,
+                    "client_version": settings.PHONEPE_CLIENT_VERSION,
+                    "env": env,
+                    "should_publish_events": False,
+                }
+                timeout = getattr(settings, "PHONEPE_REQUEST_TIMEOUT", None)
+                if timeout:
+                    client_kwargs["timeout"] = timeout
+                    client_kwargs["request_timeout"] = timeout
+                try:
+                    cls._client = StandardCheckoutClient.get_instance(**client_kwargs)
+                except TypeError:
+                    # Fallback for SDK versions that do not accept timeout params.
+                    client_kwargs.pop("timeout", None)
+                    client_kwargs.pop("request_timeout", None)
+                    cls._client = StandardCheckoutClient.get_instance(**client_kwargs)
                 logger.info("PhonePe client initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize PhonePe client: {str(e)}")
@@ -114,17 +164,33 @@ class PhonePeService:
             }
             
         except PhonePeException as e:
-            logger.error(f"PhonePe error in rent payment initiation: {str(e)}")
+            error_str = str(e)
+            if 'timeout' in error_str.lower() or 'timed out' in error_str.lower():
+                logger.error(f"PhonePe timeout in rent payment initiation: {error_str}")
+                return {
+                    'success': False,
+                    'error': 'PhonePe request timed out. Please try again.',
+                    'error_code': 'TIMEOUT_ERROR'
+                }
+            logger.error(f"PhonePe error in rent payment initiation: {error_str}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': error_str,
                 'error_code': getattr(e, 'code', 'UNKNOWN')
             }
         except Exception as e:
-            logger.error(f"Unexpected error in rent payment initiation: {str(e)}")
+            error_str = str(e)
+            if 'timeout' in error_str.lower() or 'timed out' in error_str.lower():
+                logger.error(f"PhonePe timeout in rent payment initiation: {error_str}")
+                return {
+                    'success': False,
+                    'error': 'PhonePe request timed out. Please try again.',
+                    'error_code': 'TIMEOUT_ERROR'
+                }
+            logger.error(f"Unexpected error in rent payment initiation: {error_str}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': error_str,
                 'error_code': 'UNEXPECTED_ERROR'
             }
     
@@ -195,17 +261,33 @@ class PhonePeService:
             }
             
         except PhonePeException as e:
-            logger.error(f"PhonePe error in subscription payment initiation: {str(e)}")
+            error_str = str(e)
+            if 'timeout' in error_str.lower() or 'timed out' in error_str.lower():
+                logger.error(f"PhonePe timeout in subscription payment initiation: {error_str}")
+                return {
+                    'success': False,
+                    'error': 'PhonePe request timed out. Please try again.',
+                    'error_code': 'TIMEOUT_ERROR'
+                }
+            logger.error(f"PhonePe error in subscription payment initiation: {error_str}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': error_str,
                 'error_code': getattr(e, 'code', 'UNKNOWN')
             }
         except Exception as e:
-            logger.error(f"Unexpected error in subscription payment initiation: {str(e)}")
+            error_str = str(e)
+            if 'timeout' in error_str.lower() or 'timed out' in error_str.lower():
+                logger.error(f"PhonePe timeout in subscription payment initiation: {error_str}")
+                return {
+                    'success': False,
+                    'error': 'PhonePe request timed out. Please try again.',
+                    'error_code': 'TIMEOUT_ERROR'
+                }
+            logger.error(f"Unexpected error in subscription payment initiation: {error_str}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': error_str,
                 'error_code': 'UNEXPECTED_ERROR'
             }
     

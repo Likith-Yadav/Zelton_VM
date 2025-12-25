@@ -553,7 +553,7 @@ const ProfileScreen = ({ navigation }) => {
             await AuthService.logout();
             navigation.reset({
               index: 0,
-              routes: [{ name: "Landing" }],
+              routes: [{ name: "Auth" }],
             });
           } catch (error) {
             console.error("Logout error:", error);

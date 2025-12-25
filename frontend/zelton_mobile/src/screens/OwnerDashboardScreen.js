@@ -115,7 +115,10 @@ const OwnerDashboardScreen = ({ navigation }) => {
           setError("Session expired. Please login again.");
           // Navigate to login after a delay
           setTimeout(() => {
-            navigation.navigate("Landing");
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Auth" }],
+            });
           }, 2000);
         } else if (
           dashboardResponse.error &&
@@ -411,7 +414,10 @@ const OwnerDashboardScreen = ({ navigation }) => {
         style: "destructive",
         onPress: async () => {
           await AuthService.logout();
-          navigation.navigate("Landing");
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Auth" }],
+          });
         },
       },
     ]);
